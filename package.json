@@ -67,8 +67,7 @@
       "target": [{ "target": "nsis", "arch": ["x64"] }],
       "icon": "build/icon.ico",
       "extraResources": [
-        { "from": "native/hook-helper/build/hook-helper.exe", "to": "hook-helper.exe" },
-        { "from": "native/hook-helper/build/context-helper.exe", "to": "context-helper.exe" }
+        { "from": "native/hook-helper/build/hook-helper.exe", "to": "hook-helper.exe" }
       ]
     },
     "nsis": {
@@ -87,7 +86,6 @@
       "hardenedRuntime": false,
       "extraResources": [
         { "from": "native/hook-helper/build/hook-helper", "to": "hook-helper" },
-        { "from": "native/hook-helper/build/context-helper", "to": "context-helper" },
         { "from": "build", "to": ".", "filter": ["tray*Template*.png"] }
       ],
       "extendInfo": {
