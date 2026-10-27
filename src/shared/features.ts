@@ -27,9 +27,9 @@ export function normalizeFeatures(raw: unknown): Features {
   return out;
 }
 
-/** Whether the Features page offers a feature on this platform: the teammate isn't built for Linux. */
-export function featureVisible(id: FeatureId, platform: Platform): boolean {
-  return !(id === 'teammate' && platform === 'linux');
+/** Whether the Features page offers a feature on this platform. This fork never offers the teammate, on any platform. */
+export function featureVisible(id: FeatureId, _platform: Platform): boolean {
+  return id !== 'teammate';
 }
 
 /** The Features page's rows on this platform: each top-level feature with the features that require it, in list order. */

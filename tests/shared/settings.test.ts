@@ -608,10 +608,13 @@ describe('helpers', () => {
   it('asks on the ping wheel only while the teammate is on and shares the ping key', () => {
     const same = { askTrigger: 'same', askClick: false };
     expect(overlaySettings(normalizeSettings({ teammate: same })).ask).toMatchObject({ onPing: false, click: false });
-    const on = normalizeSettings({ features: { teammate: true }, teammate: same });
-    expect(overlaySettings(on).ask.onPing).toBe(true);
-    const own = normalizeSettings({ features: { teammate: true }, teammate: { askTrigger: 'win' } });
-    expect(overlaySettings(own).ask.onPing).toBe(false);
+    // normalizeSettings keeps the teammate off in this fork, so switch it on afterwards to test the rule itself.
+    const teammateOn = (raw: Record<string, unknown>) => {
+      const s = normalizeSettings(raw);
+      return { ...s, features: { ...s.features, teammate: true } };
+    };
+    expect(overlaySettings(teammateOn({ teammate: same })).ask.onPing).toBe(true);
+    expect(overlaySettings(teammateOn({ teammate: { askTrigger: 'win' } })).ask.onPing).toBe(false);
   });
 
   it('labels the ask wheel in the app language and lists the switched-off intents', () => {
@@ -680,11 +683,10 @@ describe('feature settings', () => {
     expect(normalizeSettings({ features: { rooms: 1 } }).features.rooms).toBe(true);
   });
 
-  it('keeps the teammate off on Linux, where it is not built', () => {
+  it('keeps the teammate off on every platform, even when the file switches it on', () => {
     const on = { features: { ...DEFAULT_SETTINGS.features, teammate: true } };
-    expect(normalizeSettings(on, 'linux').features.teammate).toBe(false);
-    expect(normalizeSettings(on, 'win').features.teammate).toBe(true);
-    expect(normalizeSettings(on, 'mac').features.teammate).toBe(true);
+    for (const platform of ['win', 'mac', 'linux'] as const) expect(normalizeSettings(on, platform).features.teammate).toBe(false);
+    expect(mergeSettings(DEFAULT_SETTINGS, on).features.teammate).toBe(false);
   });
 });
 

@@ -77,14 +77,10 @@ describe('settings IPC', () => {
     expect(store.get().emoteTrigger).not.toEqual({ vk: 0x51 });
   });
 
-  it('refuses a ping or emote key on the teammate ask key and says why', async () => {
-    const s = store.get();
-    store.update({ features: { ...s.features, teammate: true }, teammate: { ...s.teammate, askTrigger: 'mouse4' } });
-    const reason = strings('en').teammate.settings.askKeyClash;
-    expect(await call(SETTINGS_CH.set, { trigger: 'mouse4' })).toMatchObject({ ok: false, error: reason });
-    expect(await call(SETTINGS_CH.set, { emoteTrigger: 'mouse4' })).toMatchObject({ ok: false, error: reason });
-    expect(store.get().trigger).not.toBe('mouse4');
-    expect(store.get().teammate.askTrigger).toBe('mouse4');
+  it('keeps the teammate off when the window asks to switch it on', async () => {
+    const result = await call(SETTINGS_CH.set, { features: { ...store.get().features, teammate: true } });
+    expect(result).toMatchObject({ ok: true, settings: { features: { teammate: false } } });
+    expect(store.get().features.teammate).toBe(false);
   });
 
   it('setSettings ignores customEmotes from the window', async () => {

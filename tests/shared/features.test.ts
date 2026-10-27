@@ -7,21 +7,21 @@ describe('features', () => {
     expect(Object.entries(DEFAULT_FEATURES).filter(([, v]) => !v).map(([k]) => k)).toEqual(['teammate']);
   });
 
-  it('keeps the teammate off by default and hidden on Linux', () => {
+  it('keeps the teammate off by default and never offers it, on any platform', () => {
     expect(DEFAULT_FEATURES.teammate).toBe(false);
     expect(featureOn({ features: DEFAULT_FEATURES }, 'teammate')).toBe(false);
-    expect(featureVisible('teammate', 'win')).toBe(true);
-    expect(featureVisible('teammate', 'mac')).toBe(true);
-    expect(featureVisible('teammate', 'linux')).toBe(false);
-    expect(featureVisible('rooms', 'linux')).toBe(true);
+    for (const platform of ['win', 'mac', 'linux'] as const) {
+      expect(featureVisible('teammate', platform)).toBe(false);
+      expect(featureVisible('rooms', platform)).toBe(true);
+    }
   });
 
   it('groups the room features under Rooms and leaves the others on their own', () => {
     expect(featureGroups('win')).toEqual([
-      { id: 'teammate', parts: [] },
       { id: 'emotes', parts: [] },
       { id: 'rooms', parts: ['roomText', 'roomVotes', 'roomPanel'] },
     ]);
+    expect(featureGroups('mac').map((g) => g.id)).toEqual(['emotes', 'rooms']);
     expect(featureGroups('linux').map((g) => g.id)).toEqual(['emotes', 'rooms']);
   });
 

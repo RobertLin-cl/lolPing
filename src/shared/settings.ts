@@ -373,8 +373,8 @@ export function normalizeSettings(raw: unknown, platform: Platform = 'win', iden
     friendEmotes: bool(r.friendEmotes, 'friendEmotes'),
     autoUpdateCheck: bool(r.autoUpdateCheck, 'autoUpdateCheck'),
     updateNotifiedVersion: isVersion(r.updateNotifiedVersion) ? r.updateNotifiedVersion : null,
-    // The teammate isn't built for Linux, so a settings file carried over from another system can't switch it on.
-    features: platform === 'linux' ? { ...normalizeFeatures(r.features), teammate: false } : normalizeFeatures(r.features),
+    // This fork keeps the teammate off on every platform: no settings file or settings patch can switch it on.
+    features: { ...normalizeFeatures(r.features), teammate: false },
     roomTextStyle: r.roomTextStyle === 'danmaku' ? 'danmaku' : 'spot',
     teammate: normalizeTeammate(r.teammate, { platform, trigger: pingTrigger, emoteTrigger: emote }),
   };
