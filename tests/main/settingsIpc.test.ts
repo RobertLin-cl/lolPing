@@ -247,14 +247,14 @@ describe('update IPC', () => {
       h.opened.length = 0;
       registerWith(fakeUpdate(state, null));
       await call(SETTINGS_CH.updateOpenRelease);
-      expect(h.opened, state.phase).toEqual(['https://github.com/darrenprx/lolPing/releases/latest']);
+      expect(h.opened, state.phase).toEqual(['https://github.com/RobertLin-cl/lolPing/releases/latest']);
     }
   });
 
   it('openReleasePage never opens a link that is not a web page', async () => {
     registerWith(fakeUpdate(AVAILABLE, 'file:///C:/Windows/System32/calc.exe'));
     await call(SETTINGS_CH.updateOpenRelease);
-    expect(h.opened).toEqual(['https://github.com/darrenprx/lolPing/releases/latest']);
+    expect(h.opened).toEqual(['https://github.com/RobertLin-cl/lolPing/releases/latest']);
   });
 });
 

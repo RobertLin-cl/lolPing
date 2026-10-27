@@ -20,7 +20,8 @@ import type { SettingsStore } from './settingsStore';
 import { ProviderError, type ProviderAdapter } from './teammate/providers/types';
 import { INSTRUCTIONS_MAX_CHARS, type SecretStore } from './teammate/secrets';
 
-const PROJECT_URL = 'https://github.com/darrenprx/lolPing';
+// This fork's own repository: its releases are where this build's updates come from.
+const PROJECT_URL = 'https://github.com/RobertLin-cl/lolPing';
 /** Where "What's new" goes when no update is known. */
 export const LATEST_RELEASE_URL = `${PROJECT_URL}/releases/latest`;
 

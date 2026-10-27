@@ -97,7 +97,7 @@
       }
     },
     "dmg": { "artifactName": "lolPing-${version}-arm64.dmg" },
-    "publish": [{ "provider": "github", "owner": "darrenprx", "repo": "lolPing" }],
+    "publish": [{ "provider": "github", "owner": "RobertLin-cl", "repo": "lolPing" }],
     "linux": {
       "target": [{ "target": "AppImage", "arch": ["x64"] }, { "target": "deb", "arch": ["x64"] }],
       "icon": "build/icon.png",
