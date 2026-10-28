@@ -17,6 +17,7 @@ export interface VoteView {
   target?: string;
   /** Fixed at the start; the kick target is not among them. */
   voters: readonly string[];
+  /** Each answer, in the order they came: a peer ID is never an array index, so the keys keep that order. */
   ballots: Readonly<Record<string, boolean>>;
   endsAt: number;
 }

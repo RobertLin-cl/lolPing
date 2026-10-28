@@ -22,6 +22,13 @@ describe('voteBoxes', () => {
       { peer: 'gone', name: '', answer: 'none' },
     ]);
   });
+
+  it('puts the answers first, left to right in the order they came, then the voters still to answer', () => {
+    const v = view({ starter: 'cc', voters: ['aa', 'bb', 'cc', 'gone'], ballots: { cc: true, gone: false, aa: true } });
+    expect(voteBoxes(v, members).map((b) => [b.peer, b.answer])).toEqual([
+      ['cc', 'yes'], ['gone', 'no'], ['aa', 'yes'], ['bb', 'none'],
+    ]);
+  });
 });
 
 describe('voteLeft', () => {

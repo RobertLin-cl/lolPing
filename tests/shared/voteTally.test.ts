@@ -116,6 +116,15 @@ describe('VoteTally', () => {
     expect(tally.check()).toMatchObject({ passed: false, yes: 2, declined: ['b'], missing: [] });
   });
 
+  it('lists the ballots in the order they came, not in the voters’ order', () => {
+    const { tally } = setup();
+    tally.start({ id: 'v1', kind: 'ready', starter: 'c', voters: ['3f9a0c2b1d4e5f60', 'b', 'c', 'd'] });
+    tally.ballot('d', 'v1', true);
+    tally.left('b');
+    tally.ballot('3f9a0c2b1d4e5f60', 'v1', true);
+    expect(Object.keys(tally.view()?.ballots ?? {})).toEqual(['c', 'd', 'b', '3f9a0c2b1d4e5f60']);
+  });
+
   it('runs one vote at a time', () => {
     const { tally } = setup();
     expect(tally.start({ id: 'v1', kind: 'ff', starter: 'a', voters: FIVE })).toBe(true);

@@ -9,9 +9,14 @@ export interface VoteBox {
   answer: 'yes' | 'no' | 'none';
 }
 
-/** One box per voter, in the order the vote fixed them. A voter who has left the room has no name any more. */
+/**
+ * One box per voter, left to right: the answers in the order they came, then the voters still to answer in the order the
+ * vote fixed them. A voter who has left the room has no name any more.
+ */
 export function voteBoxes(v: VoteView, members: readonly RoomMember[]): VoteBox[] {
-  return v.voters.map((peer) => {
+  const answered = Object.keys(v.ballots).filter((peer) => v.voters.includes(peer));
+  const waiting = v.voters.filter((peer) => !(peer in v.ballots));
+  return [...answered, ...waiting].map((peer) => {
     const ballot = v.ballots[peer];
     return { peer, name: members.find((m) => m.peer === peer)?.name ?? '', answer: ballot === undefined ? 'none' : ballot ? 'yes' : 'no' };
   });
