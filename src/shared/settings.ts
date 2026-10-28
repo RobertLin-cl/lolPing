@@ -1,3 +1,4 @@
+import { normalizeChatBounds, type ChatBounds } from './chatBounds';
 import { DEFAULT_CLICK_EMOTE, DEFAULT_EMOTE_WHEEL } from './emoteCatalog';
 import {
   CUSTOM_NAME_MAX, MAX_CUSTOM_EMOTES, customHash, isCustomRef, isEmoteFx, normalizeClickEmote, normalizeEmoteWheel,
@@ -28,7 +29,9 @@ export const NAMED_TRIGGERS: readonly NamedTrigger[] = ['alt', 'ctrl', 'shift', 
 export const keyboardTriggers = (platform: Platform): NamedTrigger[] =>
   platform !== 'win' ? ['alt', 'ctrl', 'shift', 'win'] : ['alt', 'ctrl', 'shift', 'win', 'capslock'];
 
-export type RoomTextStyle = 'spot' | 'danmaku';
+export type RoomTextStyle = 'window' | 'spot' | 'danmaku';
+/** The styles the overlay draws itself: 'window' lines go to the chat window instead. */
+export type OverlayTextStyle = Exclude<RoomTextStyle, 'window'>;
 
 export interface Settings {
   version: 1;
@@ -92,8 +95,15 @@ export interface Settings {
   updateNotifiedVersion: string | null;
   /** Optional parts of the app that can be switched off; see features.ts. */
   features: Features;
-  /** How room text appears here: a bubble at the spot the sender pointed at, or a line scrolling across the top. */
+  /**
+   * How room text appears here: in the chat window, which shows itself for a new line, as a bubble at the spot the sender
+   * pointed at, or as a line scrolling across the top.
+   */
   roomTextStyle: RoomTextStyle;
+  /** Where the chat window was left, in screen DIPs; null = its default spot. */
+  chatBounds: ChatBounds | null;
+  /** Seconds the chat window stays up after the last line, while it doesn't have the pointer or the keyboard. 0 = until hidden. */
+  chatHideS: number;
   /** The AI teammate: its ask key, profiles and history. Used only while features.teammate is on. */
   teammate: TeammateSettings;
 }
@@ -146,7 +156,9 @@ export const DEFAULT_SETTINGS: Settings = {
   autoUpdateCheck: true,
   updateNotifiedVersion: null,
   features: { ...DEFAULT_FEATURES },
-  roomTextStyle: 'spot',
+  roomTextStyle: 'window',
+  chatBounds: null,
+  chatHideS: 8,
   teammate: { ...DEFAULT_TEAMMATE },
 };
 
@@ -156,6 +168,7 @@ export const LIMITS = {
   pingSizePx: { min: 60, max: 220, step: 1 },
   pingDurationS: { min: 1, max: 8, step: 0.1 },
   panelHoldS: { min: 0, max: 1.5, step: 0.1 },
+  chatHideS: { min: 0, max: 60, step: 1 },
   volume: { min: 0, max: 100, step: 1 },
   incomingPingLimit: { min: 0, max: 20, step: 1 },
   emoteSizePx: { min: 80, max: 300, step: 1 },
@@ -381,7 +394,9 @@ export function normalizeSettings(raw: unknown, platform: Platform = 'win', iden
     updateNotifiedVersion: isVersion(r.updateNotifiedVersion) ? r.updateNotifiedVersion : null,
     // This fork keeps the teammate off on every platform: no settings file or settings patch can switch it on.
     features: { ...normalizeFeatures(r.features), teammate: false },
-    roomTextStyle: r.roomTextStyle === 'danmaku' ? 'danmaku' : 'spot',
+    roomTextStyle: r.roomTextStyle === 'spot' || r.roomTextStyle === 'danmaku' ? r.roomTextStyle : 'window',
+    chatBounds: normalizeChatBounds(r.chatBounds),
+    chatHideS: num(r.chatHideS, 'chatHideS'),
     teammate: normalizeTeammate(r.teammate, { platform, trigger: pingTrigger, emoteTrigger: emote }),
   };
 }

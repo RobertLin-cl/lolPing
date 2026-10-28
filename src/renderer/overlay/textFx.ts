@@ -1,6 +1,6 @@
 import type { PingTag } from '../../shared/ipc';
 import { tagColorCss } from '../../shared/roomColors';
-import type { RoomTextStyle } from '../../shared/settings';
+import type { OverlayTextStyle } from '../../shared/settings';
 import { DanmakuLanes, OwnerLimit, keepOnScreen, textDurationMs } from './roomTextLayout';
 
 const MAX_LINES_PER_OWNER = 3;
@@ -16,7 +16,7 @@ export interface TextLine {
   y: number;
   /** 'self' or a room member: the line cap is per owner. */
   owner: string;
-  style: RoomTextStyle;
+  style: OverlayTextStyle;
   tag?: PingTag;
 }
 

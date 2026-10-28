@@ -71,7 +71,7 @@ import { SecretStore } from './teammate/secrets';
 import { StaleWatcher } from './teammate/staleWatcher';
 import { UsageLog } from './teammate/usage';
 import { onSettingsWindowGone, openSettingsWindow, settingsWindow } from './settingsWindow';
-import { closeTextWindow, onTextWindowGone, openTextWindow, registerTextWindow, textWindow } from './textWindow';
+import { chatLinesChanged, closeTextWindow, registerTextWindow, showChat, textWindow, typeInChat } from './textWindow';
 import { AppTray, trayUpdateFrom, type TrayMode } from './tray';
 import { trayUpdateHandlers } from './trayUpdate';
 import { MacBackend, RELEASES_API } from './updateMac';
@@ -470,9 +470,17 @@ function start(): void {
     if (shared) room.sendEmote(p.ref, shared, fx);
   });
   // This session's room lines: members' text and alive lines while the text feature is on, and our own.
-  const history = new RoomHistory(() => refreshRoster());
+  const history = new RoomHistory(() => {
+    refreshRoster();
+    chatLinesChanged();
+  });
   const lineDeps: Pick<RoomTextDeps, 'show' | 'history' | 'now'> = {
-    show: (p) => overlays.spawnText({ ...p, style: settings.roomTextStyle }),
+    // The chat window shows the line through the history; it only has to come up for it.
+    show: (p) => {
+      const style = settings.roomTextStyle;
+      if (style === 'window') showChat();
+      else overlays.spawnText({ ...p, style });
+    },
     history,
     now: Date.now,
   };
@@ -483,6 +491,7 @@ function start(): void {
     else if (!on && stopRoomText) {
       stopRoomText();
       stopRoomText = null;
+      closeTextWindow();
     }
   };
   syncRoomText();
@@ -617,7 +626,8 @@ function start(): void {
       if (!at) return;
       const t = strings(mateLang(), PLATFORM).teammate.ask;
       overlays.spawnText({
-        ...at, text: why === 'full' ? t.spotsFull : t.spotsDisplay, owner: 'mate', style: settings.roomTextStyle,
+        ...at, text: why === 'full' ? t.spotsFull : t.spotsDisplay, owner: 'mate',
+        style: settings.roomTextStyle === 'danmaku' ? 'danmaku' : 'spot', // a note about the spots belongs at them
         tag: mateTag(),
       });
     },
@@ -662,47 +672,53 @@ function start(): void {
     postLine(lineDeps, { kind: 'alive', owner: 'self', tag: ownTag(), ...spot, text: text().aliveLine(who.name) });
     if (shared) room.sendAlive(peer, shared);
   };
-  registerTextWindow((raw, at) => {
-    const input = parseTextInput(raw);
-    switch (input.kind) {
-      case 'text':
-        sendOwnText(input.text, at);
-        return 'sent';
-      case 'unknown':
-        return 'unknown';
-      case 'ff':
-      case 'ready':
-        if (!roomVotes) return 'votesOff';
-        // Typing the command of the vote that is open means yes.
-        if (roomVotes.current()?.kind === input.kind) roomVotes.answer(true);
-        else if (roomVotes.start(input.kind) === 'busy') overlays.toast(text().voteBusy, '');
-        return 'sent';
-      case 'noff':
-        if (!roomVotes) return 'votesOff';
-        if (roomVotes.current()?.kind === 'ff') roomVotes.answer(false);
-        return 'sent';
-      default:
-        return 'sent'; // nothing usable was typed: just close
-    }
-  });
-  onTextWindowGone(() => {
-    textOpen = false;
-    syncSuspended();
+  registerTextWindow({
+    submit: (raw, at) => {
+      const input = parseTextInput(raw);
+      switch (input.kind) {
+        case 'text':
+          sendOwnText(input.text, at);
+          return 'sent';
+        case 'unknown':
+          return 'unknown';
+        case 'ff':
+        case 'ready':
+          if (!roomVotes) return 'votesOff';
+          // Typing the command of the vote that is open means yes.
+          if (roomVotes.current()?.kind === input.kind) roomVotes.answer(true);
+          else if (roomVotes.start(input.kind) === 'busy') overlays.toast(text().voteBusy, '');
+          return 'sent';
+        case 'noff':
+          if (!roomVotes) return 'votesOff';
+          if (roomVotes.current()?.kind === 'ff') roomVotes.answer(false);
+          return 'sent';
+        default:
+          return 'sent'; // nothing usable was typed
+      }
+    },
+    strings: () => {
+      const t = text();
+      return {
+        title: t.chatTitle, hide: t.chatHideButton, placeholder: t.textBoxPlaceholder, hint: t.textBoxHint,
+        unknown: t.textBoxUnknown, votesOff: t.textBoxVotesOff,
+      };
+    },
+    lines: () => history.lines(),
+    bounds: () => settings.chatBounds,
+    saveBounds: (chatBounds) => void store.update({ chatBounds }),
+    hideAfterMs: () => settings.chatHideS * 1000,
+    // While we type in it, the helper passes all input through, so typed letters never trigger a wheel or a shortcut.
+    typing: (on) => {
+      textOpen = on;
+      syncSuspended();
+    },
   });
   const openText = (): void => {
-    if (!live.text || textOpen || capturing) return;
-    textOpen = true;
-    syncSuspended();
-    const t = text();
+    if (!live.text || capturing) return;
     try {
-      openTextWindow(screen.getCursorScreenPoint(), {
-        placeholder: t.textBoxPlaceholder, hint: t.textBoxHint, unknown: t.textBoxUnknown, votesOff: t.textBoxVotesOff,
-      });
+      typeInChat(screen.getCursorScreenPoint());
     } catch (err) {
-      // No window will ever close to release the suspend, so release it here.
       console.warn('[text]', err);
-      textOpen = false;
-      syncSuspended();
     }
   };
   bridge.on('event', (ev) => {

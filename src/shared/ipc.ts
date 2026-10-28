@@ -7,7 +7,7 @@ import type { JoinResult, RoomState, RoomStateCore } from './room';
 import { isTagColor, isTagRgb, type TagRgb } from './roomColors';
 import type { HistoryLine } from './roomHistory';
 import { PEER_RE } from './roomProtocol';
-import type { OverlaySettings, RoomTextStyle, Settings } from './settings';
+import type { OverlaySettings, OverlayTextStyle, Settings } from './settings';
 import type { Rect } from './teammate/coords';
 import type { UpdateState } from './update';
 import type { VoteView } from './voteTally';
@@ -44,7 +44,7 @@ export interface OverlayEvents {
   'emote:clear': { owner: string };
   'toast:show': { title: string; body: string };
   /** `owner` is 'self' or a room member: each owner has at most 3 lines on screen. */
-  'text:spawn': Point & { text: string; owner: string; style: RoomTextStyle; tag?: PingTag };
+  'text:spawn': Point & { text: string; owner: string; style: OverlayTextStyle; tag?: PingTag };
   /** Removes every teammate ping and emote at once. */
   'mate:clear': null;
   /** Fades every teammate ping and emote out, then removes them. */
@@ -116,10 +116,18 @@ export function parseMateGlow(raw: unknown): MateGlow | null {
   return { box: { x, y, w, h }, color: g.color, rgb, delay: g.delay, ...(ticket === undefined ? {} : { ticket }) };
 }
 
-export const TEXT_CH = { submit: 'text:submit', cancel: 'text:cancel', strings: 'text:strings' } as const;
+/** The room chat window: the log of this session's room lines and the box to type into. */
+export const TEXT_CH = {
+  submit: 'text:submit', cancel: 'text:cancel', hide: 'text:hide', strings: 'text:strings', lines: 'text:lines',
+  linesChanged: 'text:linesChanged', hover: 'text:hover',
+} as const;
 
-/** The text box's words, in the language the app uses. */
+/** The chat window's words, in the language the app uses. */
 export interface TextBoxText {
+  /** The window's title bar. */
+  title: string;
+  /** The title bar's hide button, for screen readers. */
+  hide: string;
   placeholder: string;
   /** The commands the box understands, shown under the input. */
   hint: string;
@@ -129,14 +137,23 @@ export interface TextBoxText {
   votesOff: string;
 }
 
-/** What the app made of a submit: 'sent' closes the box, the others keep it open with a hint. */
+/** What the app made of a submit: 'sent' empties the box for the next line, the others keep the text with a hint. */
 export type TextAnswer = 'sent' | 'unknown' | 'votesOff';
 
 export interface TextApi {
-  /** Resolves with the app's answer; on 'sent' the window closes. */
+  /** Resolves with the app's answer. The box keeps the keyboard either way, so several lines can be typed in a row. */
   submit(text: string): Promise<TextAnswer>;
+  /** Esc or an empty Enter: the keyboard goes back to the app underneath, and the window stays up until it hides by itself. */
   cancel(): void;
+  /** The title bar's hide button: the window goes away now. */
+  hide(): void;
   strings(): Promise<TextBoxText | null>;
+  /** This session's room lines, oldest first. */
+  lines(): Promise<HistoryLine[]>;
+  /** Called with all the lines again whenever one is added or the room is left. Returns a function that stops it. */
+  onLines(cb: (lines: HistoryLine[]) => void): () => void;
+  /** The pointer came onto the window or left it: the window doesn't hide by itself while the pointer is over it. */
+  hover(on: boolean): void;
 }
 
 export const PANEL_CH = { state: 'panel:state', action: 'panel:action' } as const;

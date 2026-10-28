@@ -22,7 +22,7 @@ const { max: LIMIT_MAX } = LIMITS.incomingPingLimit;
 /** The slider runs 1…max+1; its last stop is Unlimited (stored as 0). */
 const toSlider = (limit: number): number => (limit === 0 ? LIMIT_MAX + 1 : limit);
 const fromSlider = (v: number): number => (v > LIMIT_MAX ? 0 : v);
-const TEXT_STYLES: readonly RoomTextStyle[] = ['spot', 'danmaku'];
+const TEXT_STYLES: readonly RoomTextStyle[] = ['window', 'spot', 'danmaku'];
 
 function NameRow({ value, onSave }: { value: string; onSave(name: string): void }) {
   const t = useText();
@@ -171,7 +171,7 @@ function InRoom({ room, allowInternet }: { room: RoomState; allowInternet: boole
 }
 
 const textStyleLabel = (t: Strings, style: RoomTextStyle): string =>
-  style === 'danmaku' ? t.roomTextStyleDanmaku : t.roomTextStyleSpot;
+  style === 'window' ? t.roomTextStyleWindow : style === 'danmaku' ? t.roomTextStyleDanmaku : t.roomTextStyleSpot;
 
 export function RoomSection({ settings: s, update }: { settings: Settings; update: Update }) {
   const t = useText();
@@ -229,6 +229,8 @@ export function RoomSection({ settings: s, update }: { settings: Settings; updat
               {TEXT_STYLES.map((v) => <Option key={v} value={v} text={textStyleLabel(t, v)}>{textStyleLabel(t, v)}</Option>)}
             </Dropdown>
           </SettingRow>
+          <SliderRow limit="chatHideS" icon={<Timer24Regular />} title={t.chatHide} description={t.chatHideDesc}
+            value={s.chatHideS} format={(v) => t.chatHideValue(v)} onChange={(v) => void update({ chatHideS: v })} />
           <SettingRow icon={<Keyboard24Regular />} title={t.textShortcut} description={t.textShortcutDesc}>
             <KeyCapture parts={hotkeyParts(s.textHotkey, api.platform)} requireModifier error={textKeyError}
               onCapture={async (c) => {

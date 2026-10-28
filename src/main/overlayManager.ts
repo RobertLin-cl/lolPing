@@ -7,7 +7,7 @@ import {
 import { WHEEL, pickSlice } from '../shared/geometry';
 import { isPingId, type PingId } from '../shared/pings';
 import type { HelperEvent, WheelKind } from '../shared/protocol';
-import type { OverlaySettings, RoomTextStyle } from '../shared/settings';
+import type { OverlaySettings, OverlayTextStyle } from '../shared/settings';
 import type { Rect } from '../shared/teammate/coords';
 import {
   displayAtPhysical, physicalBoxToLocal, physicalToDip, physicalToLocal, type DisplayMap, type LocalPoint,
@@ -339,7 +339,7 @@ export class OverlayManager extends EventEmitter {
   }
 
   /** A line of room text (ours, with no tag, or a member's), already mapped onto one of our displays. */
-  spawnText(p: { displayId: number; x: number; y: number; text: string; owner: string; style: RoomTextStyle; tag?: PingTag }): void {
+  spawnText(p: { displayId: number; x: number; y: number; text: string; owner: string; style: OverlayTextStyle; tag?: PingTag }): void {
     const { displayId, ...line } = p;
     this.send(displayId, 'text:spawn', line);
   }

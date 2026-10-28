@@ -691,15 +691,33 @@ describe('feature settings', () => {
 });
 
 describe('room text settings', () => {
-  it('defaults room text to the pointed spot', () => {
-    expect(DEFAULT_SETTINGS.roomTextStyle).toBe('spot');
+  it('defaults room text to the chat window', () => {
+    expect(DEFAULT_SETTINGS.roomTextStyle).toBe('window');
     const { roomTextStyle: _style, ...old } = DEFAULT_SETTINGS;
-    expect(normalizeSettings(old).roomTextStyle).toBe('spot');
+    expect(normalizeSettings(old).roomTextStyle).toBe('window');
   });
 
-  it('keeps the scrolling style and falls back to the spot for a bad value', () => {
+  it('keeps the spot and scrolling styles a settings file chose, and falls back to the window for a bad value', () => {
+    expect(normalizeSettings({ roomTextStyle: 'spot' }).roomTextStyle).toBe('spot');
     expect(normalizeSettings({ roomTextStyle: 'danmaku' }).roomTextStyle).toBe('danmaku');
-    for (const raw of ['scroll', 1, null, {}]) expect(normalizeSettings({ roomTextStyle: raw }).roomTextStyle).toBe('spot');
+    for (const raw of ['scroll', 1, null, {}]) expect(normalizeSettings({ roomTextStyle: raw }).roomTextStyle).toBe('window');
+  });
+
+  it('opens the chat window in its default spot until it has been moved, and keeps where it was left', () => {
+    expect(DEFAULT_SETTINGS.chatBounds).toBeNull();
+    const left = { x: -200, y: 300, width: 420, height: 260 };
+    expect(normalizeSettings({ chatBounds: left }).chatBounds).toEqual(left);
+    expect(normalizeSettings({ chatBounds: { x: 0, y: 0, width: 10, height: 10 } }).chatBounds).toBeNull();
+  });
+
+  it('hides the chat window after 8 s by default, 0 to 60 s in whole seconds', () => {
+    expect(DEFAULT_SETTINGS.chatHideS).toBe(8);
+    const { chatHideS: _hide, ...old } = DEFAULT_SETTINGS;
+    expect(normalizeSettings(old).chatHideS).toBe(8);
+    expect(normalizeSettings({ chatHideS: 0 }).chatHideS).toBe(0);
+    expect(normalizeSettings({ chatHideS: 12.4 }).chatHideS).toBe(12);
+    expect(normalizeSettings({ chatHideS: 600 }).chatHideS).toBe(60);
+    expect(normalizeSettings({ chatHideS: 'soon' }).chatHideS).toBe(8);
   });
 });
 
