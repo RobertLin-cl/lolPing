@@ -434,6 +434,8 @@ export type OverlaySettings = Pick<
   'pingSizePx' | 'pingDurationS' | 'keepLastPing' | 'volume' | 'muted' | 'tickSound' | 'wheelSizePx' | 'wheel' | 'clickPingId'
   | 'emoteWheel' | 'clickEmoteId' | 'emoteSizePx' | 'emoteSound' | 'customEmotes'
 > & {
+  /** The app's language: the page takes it as its own, so Chinese text gets that script's fonts. */
+  lang: Lang;
   /** The ask wheel: the teammate's name tag, each slice's intent label, and the slices whose intent is off. */
   ask: {
     tag: PingTag; labels: Partial<Record<PingId, string>>; disabled: PingId[];
@@ -452,6 +454,7 @@ export const overlaySettings = (s: Settings, lang: Lang = 'en'): OverlaySettings
   wheelSizePx: s.wheelSizePx, wheel: [...s.wheel], clickPingId: s.clickPingId,
   emoteWheel: [...s.emoteWheel], clickEmoteId: s.clickEmoteId, emoteSizePx: s.emoteSizePx, emoteSound: s.emoteSound,
   customEmotes: s.customEmotes.map((c) => ({ ...c })),
+  lang,
   ask: askWheel(s, lang),
 });
 

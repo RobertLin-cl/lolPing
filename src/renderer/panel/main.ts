@@ -7,6 +7,7 @@ const root = document.getElementById('root') as HTMLElement;
 
 window.panelApi.on((state) => {
   document.body.dataset.view = state.view;
+  document.documentElement.lang = state.lang; // picks the right CJK glyphs
   const act = (action: PanelAction): void => window.panelApi.act(action);
   if (state.view === 'vote' && state.vote?.kind === 'ready') return renderReady(root, state, act);
   dropReady();

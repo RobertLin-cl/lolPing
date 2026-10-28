@@ -592,6 +592,7 @@ describe('helpers', () => {
       pingSizePx: 110, pingDurationS: 3.2, keepLastPing: false, volume: 70, muted: false, tickSound: true,
       wheelSizePx: 600, wheel: ['danger', 'push', 'omw', 'allin', 'assist', 'needvision', 'missing', 'enemyvision'], clickPingId: 'generic',
       emoteWheel: [...DEFAULT_EMOTE_WHEEL], clickEmoteId: DEFAULT_CLICK_EMOTE, emoteSizePx: 150, emoteSound: true, customEmotes: [],
+      lang: 'en',
       ask: {
         tag: { name: 'AI', color: 3, rgb: null },
         labels: {

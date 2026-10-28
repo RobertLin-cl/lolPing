@@ -71,6 +71,7 @@ function dropKeptPing(): void {
 
 function applySettings(s: OverlaySettings): void {
   settings = s;
+  document.documentElement.lang = s.lang; // picks the right CJK glyphs
   sounds.forget(CUSTOM_EMOTE_URL); // an imported emote's sound may have been replaced: load it again when it next plays
   if (!s.keepLastPing) dropKeptPing();
   pingWheel.setSize(s.wheelSizePx);

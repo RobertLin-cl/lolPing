@@ -160,6 +160,7 @@ document.documentElement.addEventListener('mouseleave', () => window.textApi.hov
 void window.textApi.strings().then((t) => {
   if (!t) return;
   words = t;
+  document.documentElement.lang = t.lang; // picks the right CJK glyphs
   title.textContent = t.title;
   hideButton.title = t.hide;
   hideButton.setAttribute('aria-label', t.hide);

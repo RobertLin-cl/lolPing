@@ -10,6 +10,12 @@
   --sans: "Segoe UI Variable Text", "Segoe UI", -apple-system, "Microsoft YaHei UI", "PingFang SC", sans-serif;
   --frame-fill: linear-gradient(#0d2128, #07131a);
 }
+/* Traditional Chinese in its own fonts: YaHei and PingFang SC draw some of its characters the mainland way. Each page
+   sets its lang to the app's. */
+:root:lang(zh-TW) {
+  --serif: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, "Microsoft JhengHei UI", "PingFang TC", serif;
+  --sans: "Segoe UI Variable Text", "Segoe UI", -apple-system, "Microsoft JhengHei UI", "PingFang TC", sans-serif;
+}
 
 /* The in-game options window's frame, cut down to its edges: it stretches to any box. */
 .lol-frame {

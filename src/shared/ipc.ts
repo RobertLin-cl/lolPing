@@ -124,6 +124,8 @@ export const TEXT_CH = {
 
 /** The chat window's words, in the language the app uses. */
 export interface TextBoxText {
+  /** That language: the page takes it as its own, so Chinese text gets that script's fonts. */
+  lang: Lang;
   /** The window's title bar. */
   title: string;
   /** The title bar's hide button, for screen readers. */

@@ -736,6 +736,7 @@ function start(): void {
     strings: () => {
       const t = text();
       return {
+        lang: t.lang,
         title: t.chatTitle, hide: t.chatHideButton, placeholder: t.textBoxPlaceholder, hint: t.textBoxHint, away: t.chatAway,
         unknown: t.textBoxUnknown, votesOff: t.textBoxVotesOff, noMember: t.textBoxNoMember, noMessage: t.textBoxNoMessage,
         noReply: t.textBoxNoReply, cantWhisper: t.textBoxCantWhisper, whisperTo: t.chatWhisperTo, whisperFrom: t.chatWhisperFrom,
