@@ -1,7 +1,7 @@
 import { Button, Dropdown, Input, Option, Slider, Spinner } from '@fluentui/react-components';
 import {
   ArrowSync24Regular, Chat24Regular, Color24Regular, Desktop24Regular, Globe24Regular, Image24Regular, Keyboard24Regular, Person24Regular,
-  PeopleCommunity24Regular, SpeakerMute24Regular, TopSpeed24Regular, Warning24Regular,
+  PeopleCommunity24Regular, SpeakerMute24Regular, Timer24Regular, TopSpeed24Regular, Warning24Regular,
 } from '@fluentui/react-icons';
 import { useEffect, useRef, useState } from 'react';
 import { featureOn } from '../../../shared/features';
@@ -16,7 +16,7 @@ import { useText } from '../text';
 import type { Update } from '../useAppState';
 import { useRoomState } from '../useRoomState';
 import { KeyCapture } from './KeyCapture';
-import { SettingRow, SwitchRow } from './rows';
+import { SettingRow, SliderRow, SwitchRow } from './rows';
 
 const { max: LIMIT_MAX } = LIMITS.incomingPingLimit;
 /** The slider runs 1…max+1; its last stop is Unlimited (stored as 0). */
@@ -238,15 +238,22 @@ export function RoomSection({ settings: s, update }: { settings: Settings; updat
           </SettingRow>
         </>
       ) : null}
+      {/* The same switch as Features → Room panel, next to the key it turns off. */}
+      <SwitchRow icon={<PeopleCommunity24Regular />} title={t.featureTitle.roomPanel} description={t.featureDesc.roomPanel}
+        checked={s.features.roomPanel} onChange={(v) => void update({ features: { ...s.features, roomPanel: v } })} />
       {featureOn(s, 'roomPanel') ? (
-        <SettingRow icon={<Keyboard24Regular />} title={t.panelKey}
-          description={t.panelKeyDesc(vkLabel(s.panelKey, api.platform))}>
-          <KeyCapture parts={[vkLabel(s.panelKey, api.platform)]} requireModifier={false} error={panelKeyError}
-            onCapture={async (c) => {
-              const result = await update({ panelKey: c.vk });
-              setPanelKeyError(result.ok ? null : result.error);
-            }} />
-        </SettingRow>
+        <>
+          <SettingRow icon={<Keyboard24Regular />} title={t.panelKey}
+            description={t.panelKeyDesc(vkLabel(s.panelKey, api.platform))}>
+            <KeyCapture parts={[vkLabel(s.panelKey, api.platform)]} requireModifier={false} error={panelKeyError}
+              onCapture={async (c) => {
+                const result = await update({ panelKey: c.vk });
+                setPanelKeyError(result.ok ? null : result.error);
+              }} />
+          </SettingRow>
+          <SliderRow limit="panelHoldS" icon={<Timer24Regular />} title={t.panelHold} description={t.panelHoldDesc}
+            value={s.panelHoldS} format={(v) => t.panelHoldValue(v)} onChange={(v) => void update({ panelHoldS: v })} />
+        </>
       ) : null}
       <SwitchRow icon={<ArrowSync24Regular />} title={t.roomRejoin} checked={s.rejoinRoom} onChange={(v) => void update({ rejoinRoom: v })} />
       <SettingRow icon={<Desktop24Regular />} title={t.roomDisplays} description={t.roomDisplaysDesc}>

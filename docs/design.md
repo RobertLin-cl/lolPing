@@ -257,6 +257,7 @@ Several pings can be on screen at once, and each is independent.
 | `features` | `{emotes, rooms, roomText, roomVotes, roomPanel}` of bool; a missing or broken key falls back to on, one by one (§15) | all true |
 | `textHotkey` | `{mods, vk}`, needs Ctrl, Alt or Win | Alt+T (Alt+Y when Alt+T is taken) |
 | `panelKey` | one key code; modifiers, Esc and the key of another shortcut fall back to Tab | Tab (`0x09`) |
+| `panelHoldS` | seconds the panel key is held before the panel shows, 0–1.5 in tenths; 0 = at once | 0.5 |
 | `roomTextStyle` | `spot`/`danmaku` | `spot` |
 
 Changes apply live, with no Save button. Writes are debounced (300 ms) and atomic (write a temp file, then rename).
@@ -417,6 +418,7 @@ Every member counts the ballots itself. Nobody announces a result.
 - Events gain `{"type":"textRequested"}` and `{"type":"panel","show":bool}`. The main process reads the cursor position itself.
 - **Text hotkey:** while live it is swallowed, together with its key-up, and the helper sends `textRequested`. An app's own Alt+T (the Tools menu in Firefox, the Office ribbon) and the Mac's ⌥T character do not reach it. Alt is also the default ping trigger; Alt+T is a key combination and the wheel needs the mouse, so they do not conflict. The same holds for a custom trigger key — the text branch matches its chord exactly, modifiers included, before the trigger branch sees the key — so the settings let a text chord share a custom ping or emote key (issue #100). When Alt is released after a swallowed T, the helper injects the mask key (§5.2) so Windows does not open the menu bar.
 - **Panel key (default Tab):** the helper only watches it: every down, repeat and up still reaches the app underneath. With no modifier held, the key down makes the helper send `panel {show: true}` and its key-up `panel {show: false}`. These cases send nothing: a key down with Ctrl, Alt, Shift, Win or ⌘ held (Alt+Tab, Ctrl+Tab, Shift+Tab), a fullscreen app in front with `gameCheck` on (Windows only, so League keeps its own scoreboard), lolPing paused, and no room or the feature off.
+- **Hold before showing (main process, `src/main/panelHold.ts`):** `panel {show: true}` starts a wait of `panelHoldS`; the roster shows only if `panel {show: false}` hasn't come by then, so a quick Tab is just a Tab. The wait lives in main because the helper's Windows timer ticks once a second and macOS and Linux repeats aren't reliable.
 - **Release paths:** if the configuration changes while the key is down (the room is left, lolPing is paused, the feature is turned off), the panel hides when the key comes up. On Windows a watchdog hides the panel when a held key has not repeated for 1.5 s, in case the key-up was lost. On macOS and Linux a held key does not reliably repeat, so the watchdog is off there and the panel waits for the key-up.
 - **The panel key keeps guarantee 1 in AGENTS.md** (input passes through). Upstream took the key so a held Tab reached nothing else; this fork lets it through, so League's own scoreboard and an editor's Tab keep working while the panel shows.
 

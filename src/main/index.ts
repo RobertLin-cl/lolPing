@@ -45,6 +45,7 @@ import {
 } from './paths';
 import { deriveRoomKeys } from './roomCrypto';
 import { RoomHistory } from './roomHistory';
+import { PanelHold } from './panelHold';
 import { PanelWindows } from './panelWindows';
 import { MAX_MEMBERS, RoomManager, type RoomToast } from './roomManager';
 import { postLine, startRoomText, type RoomTextDeps } from './roomText';
@@ -434,12 +435,19 @@ function start(): void {
   room.on('state', pushRoom);
   // The vote widget and the roster live in their own windows that never take focus.
   const panels = new PanelWindows();
+  const panelHold = new PanelHold({
+    holdMs: () => settings.panelHoldS * 1000,
+    show: () => {
+      if (live.panel) panels.showRoster(screen.getCursorScreenPoint(), panelState('roster', null));
+    },
+    hide: () => panels.hideRoster(),
+  });
   // The room keys (Alt+T and the panel key) are the helper's only while a room is active, so they reach other apps otherwise.
   let live = liveKeys(settings, { active: false }, enabled);
   const sendConfig = (): void => {
     live = liveKeys(settings, { active: room.state().phase === 'active' }, enabled);
     // The helper stops reporting a held panel key once it is off, so the roster would stay up: hide it here.
-    if (!live.panel) panels.hideRoster();
+    if (!live.panel) panelHold.up();
     bridge.send(configCommand(effective(settings), enabled, live));
   };
   room.on('state', () => {
@@ -701,12 +709,12 @@ function start(): void {
     if (ev.type === 'toggled') setEnabled(ev.enabled);
     else if (ev.type === 'textRequested') openText();
     else if (ev.type === 'panel') {
-      if (!ev.show) panels.hideRoster();
-      else if (live.panel) panels.showRoster(screen.getCursorScreenPoint(), panelState('roster', null));
+      if (ev.show) panelHold.down();
+      else panelHold.up();
     } else if (ev.type === 'ready') {
       // A restarted helper starts unsuspended: re-apply an active key capture.
       if (capturing || textOpen || wordsOpen) syncSuspended();
-      panels.hideRoster(); // a restarted helper lost the panel key's up, so a shown roster would stay up
+      panelHold.up(); // a restarted helper lost the panel key's up, so a shown roster would stay up
       mate?.stale.helperReady();
     } else if (ev.type === 'scroll') mate?.stale.scroll({ x: ev.x, y: ev.y });
     else if (ev.type === 'error') console.warn('[helper]', ev.code ?? '', ev.message);

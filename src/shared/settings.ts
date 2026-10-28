@@ -49,6 +49,8 @@ export interface Settings {
   textHotkey: Hotkey;
   /** Held in a room to show the room panel: one key's virtual-key code, no modifiers. */
   panelKey: number;
+  /** Seconds the panel key must be held before the room panel shows, so a quick tap is just a key press. 0 = at once. */
+  panelHoldS: number;
   pingSizePx: number;
   pingDurationS: number;
   /** Your newest ping stays on screen until your next one or a pause (pings from the room still fade). */
@@ -115,6 +117,7 @@ export const DEFAULT_SETTINGS: Settings = {
   toggleHotkey: { mods: MOD.ctrl | MOD.alt, vk: 0x50 },
   textHotkey: { mods: MOD.alt, vk: 0x54 },
   panelKey: 0x09,
+  panelHoldS: 0.5,
   pingSizePx: 110,
   pingDurationS: 3.2,
   keepLastPing: false,
@@ -151,6 +154,7 @@ export const LIMITS = {
   wheelSizePx: { min: 300, max: 900, step: 10 },
   pingSizePx: { min: 60, max: 220, step: 1 },
   pingDurationS: { min: 1, max: 8, step: 0.1 },
+  panelHoldS: { min: 0, max: 1.5, step: 0.1 },
   volume: { min: 0, max: 100, step: 1 },
   incomingPingLimit: { min: 0, max: 20, step: 1 },
   emoteSizePx: { min: 80, max: 300, step: 1 },
@@ -347,6 +351,7 @@ export function normalizeSettings(raw: unknown, platform: Platform = 'win', iden
     toggleHotkey,
     textHotkey,
     panelKey: panelKey(r.panelKey, [triggerVk(pingTrigger), emoteVk, toggleHotkey.vk, textHotkey.vk]),
+    panelHoldS: num(r.panelHoldS, 'panelHoldS'),
     pingSizePx: num(r.pingSizePx, 'pingSizePx'),
     pingDurationS: num(r.pingDurationS, 'pingDurationS'),
     keepLastPing: bool(r.keepLastPing, 'keepLastPing'),

@@ -703,6 +703,22 @@ describe('room text settings', () => {
   });
 });
 
+describe('room panel hold', () => {
+  it('waits half a second by default, also for a settings file from before the setting', () => {
+    expect(DEFAULT_SETTINGS.panelHoldS).toBe(0.5);
+    const { panelHoldS: _hold, ...old } = DEFAULT_SETTINGS;
+    expect(normalizeSettings(old).panelHoldS).toBe(0.5);
+  });
+
+  it('keeps the hold between 0 and 1.5 s in tenths, and falls back to the default for a bad value', () => {
+    expect(normalizeSettings({ panelHoldS: 0 }).panelHoldS).toBe(0);
+    expect(normalizeSettings({ panelHoldS: 0.84 }).panelHoldS).toBe(0.8);
+    expect(normalizeSettings({ panelHoldS: 9 }).panelHoldS).toBe(1.5);
+    expect(normalizeSettings({ panelHoldS: -1 }).panelHoldS).toBe(0);
+    for (const raw of ['1', null, Number.NaN]) expect(normalizeSettings({ panelHoldS: raw }).panelHoldS).toBe(0.5);
+  });
+});
+
 describe('soundLevel', () => {
   it('turns the volume setting into 0 to 1, and is 0 while muted', () => {
     expect(soundLevel({ volume: 70, muted: false })).toBe(0.7);
