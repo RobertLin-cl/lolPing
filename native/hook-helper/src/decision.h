@@ -52,7 +52,7 @@ struct Config {
   // The room keys are live only once a config turns them on (0 = off), so nothing is captured before the first config.
   uint32_t textMods = ModCtrl | ModAlt;
   uint32_t textVk = 0;
-  uint32_t panelVk = 0;  // held with no modifier to show the room panel; the app underneath still gets it
+  uint32_t panelVk = 0;  // held with no modifier to show the room panel; the app gets its press and release, not its repeats
   bool enabled = true;
 };
 

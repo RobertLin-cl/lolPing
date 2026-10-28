@@ -394,8 +394,10 @@ void Decision::onKeyDown(const InputEvent& e, Result& r) {
     }
     return;
   }
-  // The room panel key is only watched: the app underneath still gets every down, repeat and up.
+  // The room panel key: its first down and its up reach the app underneath, so a quick press is just a key press. Its
+  // repeats are swallowed, so a key held for the panel doesn't keep acting in the app under it.
   if (panelDown_ != 0 && vk == panelDown_) {
+    r.swallow = true;
     lastPanelMs_ = e.timeMs;
     return;
   }

@@ -584,12 +584,12 @@ static bool panelShows(const Result& r, bool show) {
 
 static void test_panel_key_shows_on_press_and_hides_on_release() {
   Decision d = withPanel();
-  Result r = d.onEvent(kd(TAB));  // the app underneath gets every down, repeat and up
+  Result r = d.onEvent(kd(TAB));  // the app underneath gets the press and the release
   CHECK(!r.swallow && panelShows(r, true) && r.injects.empty());
-  r = d.onEvent(kd(TAB));  // auto-repeat
-  CHECK(!r.swallow && r.emits.empty() && r.injects.empty());
+  r = d.onEvent(kd(TAB));  // but not the auto-repeats, so a held key doesn't keep acting under the panel
+  CHECK(r.swallow && r.emits.empty() && r.injects.empty());
   r = d.onEvent(kd(TAB));
-  CHECK(!r.swallow && r.emits.empty());
+  CHECK(r.swallow && r.emits.empty());
   r = d.onEvent(ku(TAB));
   CHECK(!r.swallow && panelShows(r, false) && r.injects.empty());
   r = d.onEvent(kd(TAB));  // the next press shows it again
@@ -673,8 +673,8 @@ static void test_panel_key_up_after_config_change_hides_the_panel() {
   Config off = d.config();
   off.panelVk = 0;  // left the room, or the feature went off, with Tab still held
   d.setConfig(off);
-  Result r = d.onEvent(kd(TAB));  // repeats keep reaching the app
-  CHECK(!r.swallow && r.emits.empty());
+  Result r = d.onEvent(kd(TAB));  // its repeats stay swallowed until it comes up
+  CHECK(r.swallow && r.emits.empty());
   r = d.onEvent(ku(TAB));
   CHECK(!r.swallow && panelShows(r, false));
   r = d.onEvent(kd(TAB));  // and the next Tab shows nothing
