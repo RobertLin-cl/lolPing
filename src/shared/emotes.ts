@@ -26,10 +26,14 @@ export type EmoteArt =
   | { kind: 'placeholder' };
 
 export type ImportError = 'type' | 'size' | 'animSize' | 'detail' | 'full' | 'duplicate' | 'disk';
-/** What the settings renderer sends the main process when importing: the 160 px still and, optionally, the original animation. */
+/**
+ * What the settings renderer sends the main process when importing: the 160 px still, the HD still it links to (none
+ * for an image no larger than the still) and, optionally, the original animation.
+ */
 export interface EmoteFile {
   name: string;
   still: Uint8Array;
+  hd?: Uint8Array;
   anim?: Uint8Array;
 }
 export type ImportResult = { ok: true; id: EmoteRef } | { ok: false; error: ImportError };
@@ -42,6 +46,12 @@ export const CUSTOM_NAME_MAX = 24;
 export const STILL_MAX_BYTES = 12_288;
 export const STILL_SIDE = 160;
 export const STILL_FALLBACK_SIDE = 128;
+/**
+ * The HD still: the sharper copy shown on screen, ours and friends' alike, which travels after the still. 512 px is sharp
+ * up to an emote size of 256 on a 2x display; 48 KB keeps one at about 13 s over the relays.
+ */
+export const HD_SIDE = 512;
+export const HD_MAX_BYTES = 49_152;
 export const INPUT_MAX_BYTES = 8_388_608;
 /** The longest side of a picked image the settings window will decode: a small file can declare billions of pixels. */
 export const INPUT_MAX_SIDE = 8192;
@@ -81,6 +91,8 @@ export const emoteSoundUrl = (slug: string): string => `../emotes/${slug}.ogg`;
 /** Imported emotes live in the user's data folder; the lolping:// protocol serves them under this. */
 export const CUSTOM_EMOTE_URL = 'lolping://emotes/';
 export const customStillUrl = (hash: string): string => `${CUSTOM_EMOTE_URL}${hash}.webp`;
+/** The HD still, or the still while there is none. */
+export const customHdUrl = (hash: string): string => `${CUSTOM_EMOTE_URL}${hash}.hd`;
 export const customAnimUrl = (hash: string): string => `${CUSTOM_EMOTE_URL}${hash}.anim`;
 export const customSoundUrl = (hash: string): string => `${CUSTOM_EMOTE_URL}${hash}.sound`;
 

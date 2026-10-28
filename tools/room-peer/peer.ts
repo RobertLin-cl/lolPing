@@ -15,6 +15,7 @@ import { RateLimiter } from '../../src/main/rateLimiter';
 import { RELAY_PING_BURST, RELAY_PING_RATE } from '../../src/main/roomManager';
 import type { Transport } from '../../src/main/transport';
 import { EMOTE_CATALOG } from '../../src/shared/emoteCatalog';
+import { linkedHd } from '../../src/shared/hdLink';
 import { ALL_PINGS } from '../../src/shared/pings';
 import { parseRoomCode } from '../../src/shared/roomCode';
 import {
@@ -116,9 +117,10 @@ const transport: Transport = values.relay
   ? new RelayTransport()
   : new LanTransport({ port: Number(values.port), seeds: [{ host: values.host!, port: 47474 }] });
 const label = values.relay ? 'relay' : 'lan';
-// Custom emote stills, both ways, through the app's own transfer logic: lolPing's announced stills are fetched and
-// verified here, and --image is served to lolPing.
-const received = new Set<string>();
+// Custom emote stills, both ways, through the app's own transfer logic: lolPing's announced stills, then the HD stills
+// they link, are fetched and verified here, and --image is served to lolPing.
+const received = new Map<string, string | null>(); // still hash → the HD it links to (null: none)
+const receivedHds = new Set<string>(); // the stills whose HD arrived
 const lanKeys = new Map<string, string>(); // member peer ID → the address its packets come from
 const answered = new Set<string>();
 const relayCap = new RateLimiter(Date.now);
@@ -146,11 +148,18 @@ const transfer = new EmoteTransfer({
   now: Date.now,
   have: (h) => h === imageHash || received.has(h),
   still: (h) => (h === imageHash ? image : null),
+  link: (h) => (h === imageHash && image ? linkedHd(image) : received.get(h) ?? null),
+  haveHd: (h) => receivedHds.has(h),
+  hd: () => null, // --image comes without an HD
   announced: () => (imageHash ? [imageHash] : []),
   enabled: () => true,
-  put: (h) => {
-    received.add(h);
-    console.log(`[in] still ${h} arrived and passed the hash and image checks`);
+  put: (h, b) => {
+    received.set(h, linkedHd(b));
+    console.log(`[in] still ${h} arrived and passed the hash and image checks${received.get(h) ? '; it links an HD' : ''}`);
+  },
+  putHd: (h, b) => {
+    receivedHds.add(h);
+    console.log(`[in] HD of ${h} arrived (${b.length} bytes) and passed the hash and image checks`);
   },
   routeOf: (p) => (values.relay ? 'shared' : lanKeys.has(p) ? 'lan' : null),
   sendToLan: (p, body) => {

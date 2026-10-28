@@ -13,6 +13,7 @@ import {
 } from '../shared/ipc';
 import { announcedEmoteHashes } from '../shared/emotes';
 import { featureOn, liveKeys, roomFeaturesOff } from '../shared/features';
+import { linkedHd } from '../shared/hdLink';
 import { hotkeyLabel } from '../shared/keys';
 import { LOGO_TEXTURE } from '../shared/pings';
 import { activateCommand, configCommand, type HelperStatus } from '../shared/protocol';
@@ -31,7 +32,7 @@ import { muteToggle, parseTextInput, whisperTarget } from '../shared/textCommand
 import { updateErrorText, type UpdateState } from '../shared/update';
 import { registerAppScheme, serveAppScheme } from './appProtocol';
 import { resolveTarget, toShared } from './displayNumbers';
-import { EmoteCache } from './emoteCache';
+import { EmoteCache, HD_CACHE } from './emoteCache';
 import { EmoteLibrary, resolveEmoteArt } from './emoteLibrary';
 import { EmoteTransfer } from './emoteTransfer';
 import { isFile } from './fileState';
@@ -205,7 +206,9 @@ function setMacMenu(): void {
 function start(): void {
   const library = new EmoteLibrary(join(settingsDir(), 'emotes'));
   const cache = new EmoteCache(join(settingsDir(), 'emote-cache'), Date.now);
+  const hdCache = new EmoteCache(cache.dir, Date.now, HD_CACHE);
   void cache.present();
+  void hdCache.present();
   serveAppScheme({
     rendererRoot: process.env.ELECTRON_RENDERER_URL ? null : join(__dirname, '../renderer'), // development pages come from Vite
     emoteDirs: () => [library.dir, cache.dir], // the library wins; the cache only fills the gaps
@@ -236,7 +239,8 @@ function start(): void {
     (ref, remote) =>
       resolveEmoteArt(ref, settings.customEmotes, remote, (hash) => {
         if (!settings.friendEmotes || !cache.has(hash)) return false; // off: friends' images show as the placeholder
-        cache.touch(hash); // a shown still is the most recently used at the next cache sweep
+        cache.touch(hash); // a shown still, and its HD, are the most recently used at the next cache sweep
+        hdCache.touch(hash);
         return true;
       }),
   );
@@ -299,20 +303,32 @@ function start(): void {
     // With emotes switched off we announce none, so friends don't send stills for emotes we won't use.
     announceEmotes: () => (featureOn(settings, 'emotes') ? announcedEmoteHashes(settings.emoteWheel, settings.clickEmoteId) : []),
   });
-  // Custom emote stills travel both ways: this side asks for friends' hashes and answers wants for our own.
+  /** The first of `dirs` that has `name`, read whole. */
+  const readEmoteFile = (name: string, dirs: readonly string[]): Uint8Array | null => {
+    for (const dir of dirs) {
+      try {
+        return new Uint8Array(readFileSync(join(dir, name)));
+      } catch {
+        // not in this folder
+      }
+    }
+    return null;
+  };
+  // Custom emote stills, then their HD stills, travel both ways: this side asks for friends' hashes and answers wants for our own.
   const transfer = new EmoteTransfer({
     now: Date.now,
     enabled: () => settings.friendEmotes && featureOn(settings, 'emotes'),
     have: (hash) => isFile(join(library.dir, `${hash}.webp`), false) || cache.has(hash),
-    still: (hash) => {
-      try {
-        return new Uint8Array(readFileSync(join(library.dir, `${hash}.webp`)));
-      } catch {
-        return null;
-      }
+    still: (hash) => readEmoteFile(`${hash}.webp`, [library.dir]),
+    link: (hash) => {
+      const still = readEmoteFile(`${hash}.webp`, [library.dir, cache.dir]);
+      return still && linkedHd(still);
     },
+    haveHd: (hash) => isFile(join(library.dir, `${hash}.hd.webp`), false) || hdCache.has(hash),
+    hd: (hash) => readEmoteFile(`${hash}.hd.webp`, [library.dir]),
     announced: () => announcedEmoteHashes(settings.emoteWheel, settings.clickEmoteId),
     put: (hash, bytes) => void cache.put(hash, bytes),
+    putHd: (hash, bytes) => void hdCache.put(hash, bytes),
     routeOf: (peer) => room.routeKind(peer),
     sendToLan: (peer, body) => room.sendToLan(peer, body),
     broadcastShared: (body) => room.broadcastShared(body),

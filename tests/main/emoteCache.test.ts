@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, utimesSync, wr
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CACHE_MAX_BYTES, CACHE_MAX_FILES, EmoteCache } from '../../src/main/emoteCache';
+import { CACHE_MAX_BYTES, CACHE_MAX_FILES, EmoteCache, HD_CACHE } from '../../src/main/emoteCache';
 
 const HASH = (n: number): string => n.toString(16).padStart(32, '0');
 const stillOf = (n: number, size: number): Uint8Array => new Uint8Array(size).fill(n + 1);
@@ -90,6 +90,33 @@ describe('EmoteCache', () => {
     rmSync(join(dir, `${HASH(3)}.webp`));
     await cache.sweep();
     expect(cache.has(HASH(3))).toBe(false);
+  });
+});
+
+describe('EmoteCache: HD stills beside the stills', () => {
+  it('keeps each kind apart in the same folder: its own names, its own index, its own caps', async () => {
+    const hds = new EmoteCache(dir, () => clock, HD_CACHE);
+    await cache.put(HASH(1), stillOf(1, 100));
+    await hds.put(HASH(1), stillOf(2, 200));
+    await hds.put(HASH(2), stillOf(3, 200));
+    expect(readdirSync(dir).sort()).toEqual([`${HASH(1)}.hd.webp`, `${HASH(1)}.webp`, `${HASH(2)}.hd.webp`]);
+    expect(cache.has(HASH(2))).toBe(false); // an HD is not a still
+
+    const [stills, hdsAgain] = [new EmoteCache(dir, () => clock), new EmoteCache(dir, () => clock, HD_CACHE)];
+    await Promise.all([stills.present(), hdsAgain.present()]);
+    expect([stills.has(HASH(1)), stills.has(HASH(2))]).toEqual([true, false]);
+    expect([hdsAgain.has(HASH(1)), hdsAgain.has(HASH(2))]).toEqual([true, true]);
+  });
+
+  it('holds more bytes of HDs than of stills, and evicts only HDs to stay under them', async () => {
+    const hds = new EmoteCache(dir, () => clock, HD_CACHE);
+    await cache.put(HASH(0), stillOf(0, 100));
+    const perFile = 1_000_000;
+    for (let n = 1; n <= 12; n++) await hds.put(HASH(n), stillOf(n, perFile));
+    const kept = readdirSync(dir).filter((f) => f.endsWith('.hd.webp')).length;
+    expect(kept * perFile).toBeLessThanOrEqual(HD_CACHE.maxBytes);
+    expect(kept * perFile).toBeGreaterThan(CACHE_MAX_BYTES);
+    expect(cache.has(HASH(0))).toBe(true);
   });
 });
 

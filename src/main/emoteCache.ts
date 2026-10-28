@@ -8,11 +8,21 @@ export const CACHE_MAX_FILES = 200;
 export const CACHE_MAX_BYTES = 4 * 1024 * 1024;
 /** A crashed put leaves a `.tmp` behind; a live one owns its file for milliseconds, so only tmp this old is swept. */
 const STALE_TMP_MS = 5 * 60_000;
-const NAME_RE = /^([0-9a-f]{32})\.webp$/;
 
-/** Owns `<settings folder>/emote-cache/`: verified stills that arrived over a room, capped, evicted by last use. */
+/** What one cache keeps: the name after each hash, and its caps. */
+export interface CacheKind {
+  suffix: string;
+  maxFiles: number;
+  maxBytes: number;
+}
+export const STILL_CACHE: CacheKind = { suffix: '.webp', maxFiles: CACHE_MAX_FILES, maxBytes: CACHE_MAX_BYTES };
+/** Friends' HD stills, named by the still that links them, beside the stills under caps of their own: 200 HDs of up to 48 KB. */
+export const HD_CACHE: CacheKind = { suffix: '.hd.webp', maxFiles: 200, maxBytes: 10 * 1024 * 1024 };
+
+/** Owns one kind of file in `<settings folder>/emote-cache/`: verified images that arrived over a room, capped, evicted by last use. */
 export class EmoteCache {
   readonly dir: string;
+  private readonly nameRe: RegExp;
   /**
    * What is on disk: each still's size and when it was last stored or shown (the file's mtime after a launch).
    * Kept in use order too, so a tie on `at` goes to the newer use.
@@ -21,8 +31,9 @@ export class EmoteCache {
   /** Set after the first write failure, so the log says so once: received stills stay unavailable (the placeholder). */
   private broken = false;
 
-  constructor(dir: string, private readonly now: () => number) {
+  constructor(dir: string, private readonly now: () => number, private readonly kind: CacheKind = STILL_CACHE) {
     this.dir = dir;
+    this.nameRe = new RegExp(`^([0-9a-f]{32})${kind.suffix.replace(/\./g, '\\.')}$`);
   }
 
   /** Reads what earlier sessions left behind. Run once at launch, before anything asks has(). */
@@ -43,11 +54,11 @@ export class EmoteCache {
   /** Stores a still that has already been verified against its hash and image header. False when the disk refused. */
   async put(hash: string, bytes: Uint8Array): Promise<boolean> {
     if (!isCustomRef(`c:${hash}`)) return false;
-    const tmp = join(this.dir, `${hash}.webp.tmp`);
+    const tmp = join(this.dir, `${hash}${this.kind.suffix}.tmp`);
     try {
       await mkdir(this.dir, { recursive: true });
       await writeFile(tmp, bytes);
-      await renameWithRetry(tmp, join(this.dir, `${hash}.webp`));
+      await renameWithRetry(tmp, join(this.dir, `${hash}${this.kind.suffix}`));
       this.use(hash, bytes.length);
       await this.evict();
       return true;
@@ -71,7 +82,7 @@ export class EmoteCache {
     }
     const entries = new Map<string, { size: number; at: number }>();
     for (const name of names) {
-      const m = NAME_RE.exec(name);
+      const m = this.nameRe.exec(name);
       const tmp = name.endsWith('.tmp');
       if (!m && !tmp) continue;
       try {
@@ -91,19 +102,19 @@ export class EmoteCache {
     this.entries.set(hash, { size, at: this.now() });
   }
 
-  /** Keeps at most CACHE_MAX_FILES stills and CACHE_MAX_BYTES, evicting the least recently used. */
+  /** Keeps at most the kind's maxFiles files and maxBytes, evicting the least recently used. */
   private async evict(): Promise<void> {
     const byUse = [...this.entries].reverse().sort((a, b) => b[1].at - a[1].at);
     let files = 0;
     let bytes = 0;
     for (const [hash, e] of byUse) {
-      if (files < CACHE_MAX_FILES && bytes + e.size <= CACHE_MAX_BYTES) {
+      if (files < this.kind.maxFiles && bytes + e.size <= this.kind.maxBytes) {
         files++;
         bytes += e.size;
         continue;
       }
       this.entries.delete(hash); // has() says no at once, before the file is gone
-      await rm(join(this.dir, `${hash}.webp`), { force: true }).catch(() => undefined);
+      await rm(join(this.dir, `${hash}${this.kind.suffix}`), { force: true }).catch(() => undefined);
     }
   }
 }

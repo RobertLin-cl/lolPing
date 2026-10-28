@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  checkAnimation, checkDimensions, checkInput, checkSound, fitSize, nameFromFile, stillAttempts,
+  checkAnimation, checkDimensions, checkInput, checkSound, fitSize, hdAttempts, nameFromFile, stillAttempts,
 } from '../../src/renderer/settings/emoteImport';
 
 const ascii = (s: string): number[] => [...s].map((c) => c.charCodeAt(0));
@@ -16,6 +16,12 @@ describe('stillAttempts', () => {
   it('tries 160 px then 128 px', () => {
     const q = [0.85, 0.75, 0.65, 0.55, 0.45];
     expect(stillAttempts()).toEqual([...q.map((quality) => ({ side: 160, quality })), ...q.map((quality) => ({ side: 128, quality }))]);
+  });
+});
+
+describe('hdAttempts', () => {
+  it('tries 512 px first, each size at two qualities, down to 256 px', () => {
+    expect(hdAttempts()).toEqual([512, 384, 320, 256].flatMap((side) => [{ side, quality: 0.85 }, { side, quality: 0.75 }]));
   });
 });
 

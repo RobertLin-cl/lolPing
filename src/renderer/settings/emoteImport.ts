@@ -1,21 +1,32 @@
 import { sniffAudio } from '../../shared/audioSniff';
 import {
-  ANIM_MAX_BYTES, ANIM_MAX_SIDE, INPUT_MAX_BYTES, INPUT_MAX_SIDE, SOUND_MAX_BYTES, SOUND_MAX_S, STILL_FALLBACK_SIDE, STILL_MAX_BYTES,
-  STILL_SIDE, type EmoteFile, type ImportError, type SoundError,
+  ANIM_MAX_BYTES, ANIM_MAX_SIDE, HD_MAX_BYTES, HD_SIDE, INPUT_MAX_BYTES, INPUT_MAX_SIDE, SOUND_MAX_BYTES, SOUND_MAX_S,
+  STILL_FALLBACK_SIDE, STILL_MAX_BYTES, STILL_SIDE, type EmoteFile, type ImportError, type SoundError,
 } from '../../shared/emotes';
+import { HD_LINK_MAX_BYTES, linkHd } from '../../shared/hdLink';
 import { imageSize, sniffImage, type ImageType } from '../../shared/imageSniff';
 
 export type Prepared = { ok: true; file: EmoteFile } | { ok: false; error: ImportError };
 export type PreparedSound = { ok: true; bytes: Uint8Array } | { ok: false; error: SoundError };
 
 const QUALITIES: readonly number[] = [0.85, 0.75, 0.65, 0.55, 0.45];
+/** A smaller HD beats a blockier one: below 0.75 the next size down looks better at the same bytes. */
+const HD_QUALITIES: readonly number[] = [0.85, 0.75];
+const HD_SIDES: readonly number[] = [HD_SIDE, 384, 320, 256];
 const MIME: Record<ImageType, string> = { png: 'image/png', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' };
 
 const fail = (error: ImportError): Prepared => ({ ok: false, error });
 
+type Attempt = { side: number; quality: number };
+
 /** The still's encodings, in the order tried: each quality at 160 px, then each again at 128 px. */
-export function stillAttempts(): { side: number; quality: number }[] {
+export function stillAttempts(): Attempt[] {
   return [STILL_SIDE, STILL_FALLBACK_SIDE].flatMap((side) => QUALITIES.map((quality) => ({ side, quality })));
+}
+
+/** The HD's encodings, in the order tried: from 512 px down to 256, each at two qualities. */
+export function hdAttempts(): Attempt[] {
+  return HD_SIDES.flatMap((side) => HD_QUALITIES.map((quality) => ({ side, quality })));
 }
 
 /** Scales (w, h) so its longest side is `side`, never up, and never to less than a pixel. */
@@ -49,10 +60,10 @@ export function checkAnimation(bytes: Uint8Array, width: number, height: number)
 /** The file name without its extension (main sanitises it). */
 export const nameFromFile = (fileName: string): string => fileName.replace(/(.)\.[^.]*$/, '$1');
 
-/** The first encoding of `frame` that fits STILL_MAX_BYTES, or null when even the smallest is too big. */
-async function encodeStill(frame: VideoFrame): Promise<Uint8Array | null> {
+/** The first of `attempts` that encodes `frame` as a WebP of at most `maxBytes`, or null when even the last is too big. */
+async function encodeFirstFit(frame: VideoFrame, attempts: readonly Attempt[], maxBytes: number): Promise<Uint8Array<ArrayBuffer> | null> {
   let canvas: OffscreenCanvas | null = null;
-  for (const { side, quality } of stillAttempts()) {
+  for (const { side, quality } of attempts) {
     const size = fitSize(frame.displayWidth, frame.displayHeight, side);
     if (!canvas || canvas.width !== size.width || canvas.height !== size.height) {
       canvas = new OffscreenCanvas(size.width, size.height);
@@ -62,14 +73,21 @@ async function encodeStill(frame: VideoFrame): Promise<Uint8Array | null> {
       ctx.drawImage(frame, 0, 0, size.width, size.height);
     }
     const blob = await canvas.convertToBlob({ type: 'image/webp', quality });
-    if (blob.type === 'image/webp' && blob.size <= STILL_MAX_BYTES) return new Uint8Array(await blob.arrayBuffer());
+    if (blob.type === 'image/webp' && blob.size <= maxBytes) return new Uint8Array(await blob.arrayBuffer());
   }
   return null;
 }
 
+/** The 32-hex hash main names an image by: the first half of its SHA-256. */
+async function imageHash(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+  return [...digest.subarray(0, 16)].map((v) => v.toString(16).padStart(2, '0')).join('');
+}
+
 /**
- * Turns a picked or dropped file into what main saves: a small WebP still of its first frame and, for a GIF or WebP with
- * more than one frame, the original bytes as the animation.
+ * Turns a picked or dropped file into what main saves: a small WebP still of its first frame, the HD still that still
+ * links to (for an image larger than the still) and, for a GIF or WebP with more than one frame, the original bytes as
+ * the animation.
  */
 export async function prepareEmote(file: File): Promise<Prepared> {
   if (file.size > INPUT_MAX_BYTES) {
@@ -93,10 +111,16 @@ export async function prepareEmote(file: File): Promise<Prepared> {
       const tooBig = checkAnimation(bytes, frame.displayWidth, frame.displayHeight);
       if (tooBig) return fail(tooBig);
     }
-    const still = await encodeStill(frame);
-    if (!still) return fail('detail');
+    // The HD comes first: the still names it, and must leave room for that link within its bytes. An image no larger than
+    // the still has nothing sharper to give, and one too busy to fit the HD's bytes at 256 px travels as the still alone.
+    const hd = Math.max(frame.displayWidth, frame.displayHeight) > STILL_SIDE
+      ? await encodeFirstFit(frame, hdAttempts(), HD_MAX_BYTES) : null;
+    const plain = await encodeFirstFit(frame, stillAttempts(), STILL_MAX_BYTES - (hd ? HD_LINK_MAX_BYTES : 0));
+    if (!plain) return fail('detail');
+    const linked = hd ? linkHd(plain, await imageHash(hd)) : null;
     const name = nameFromFile(file.name);
-    return { ok: true, file: animated ? { name, still, anim: bytes } : { name, still } };
+    const images = hd && linked ? { still: linked, hd } : { still: plain };
+    return { ok: true, file: animated ? { name, ...images, anim: bytes } : { name, ...images } };
   } catch {
     return fail('type'); // looked like an image, but doesn't decode
   } finally {

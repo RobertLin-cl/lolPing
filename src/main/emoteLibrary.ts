@@ -3,10 +3,11 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { AUDIO_TYPES, sniffAudio } from '../shared/audioSniff';
 import {
-  ANIM_MAX_BYTES, ANIM_MAX_SIDE, CUSTOM_NAME_MAX, MAX_CUSTOM_EMOTES, SOUND_MAX_BYTES, STILL_MAX_BYTES, STILL_SIDE, customAnimUrl,
-  customHash, customSoundUrl, customStillUrl, isBundledEmote, isCustomRef, type CustomEmote, type EmoteArt, type EmoteFile,
-  type EmoteRef, type ImportError, type SoundError,
+  ANIM_MAX_BYTES, ANIM_MAX_SIDE, CUSTOM_NAME_MAX, HD_MAX_BYTES, HD_SIDE, MAX_CUSTOM_EMOTES, SOUND_MAX_BYTES, STILL_MAX_BYTES, STILL_SIDE,
+  customAnimUrl, customHash, customHdUrl, customSoundUrl, isBundledEmote, isCustomRef, type CustomEmote, type EmoteArt,
+  type EmoteFile, type EmoteRef, type ImportError, type SoundError,
 } from '../shared/emotes';
+import { linkedHd } from '../shared/hdLink';
 import { gifExtent, isAnimatedWebp, sniffImage, webpSize } from '../shared/imageSniff';
 import { sanitizeName } from '../shared/roomProtocol';
 import { isFile } from './fileState';
@@ -19,22 +20,31 @@ export type SaveResult = { ok: true; emote: CustomEmote } | { ok: false; error: 
 const fail = (error: ImportError): SaveResult => ({ ok: false, error });
 const longest = (size: { width: number; height: number }): number => Math.max(size.width, size.height);
 
+/** The 32-hex hash that names an image: an emote's ID is its still's, and a still links its HD by the HD's. */
+export const emoteHash = (b: Uint8Array): string => createHash('sha256').update(b).digest('hex').slice(0, 32);
+
 /** An import as it arrived over IPC, rebuilt from its known fields: a string name and byte arrays. Null for anything else. */
 export function emoteFileFrom(raw: unknown): EmoteFile | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  const { name, still, anim } = raw as Record<string, unknown>;
+  const { name, still, hd, anim } = raw as Record<string, unknown>;
   if (typeof name !== 'string' || !(still instanceof Uint8Array)) return null;
-  if (anim === undefined) return { name, still };
-  return anim instanceof Uint8Array ? { name, still, anim } : null;
+  if ((hd !== undefined && !(hd instanceof Uint8Array)) || (anim !== undefined && !(anim instanceof Uint8Array))) return null;
+  return { name, still, ...(hd ? { hd } : {}), ...(anim ? { anim } : {}) };
+}
+
+/** A still WebP of at most `maxBytes` and `side` px: it is served as an <img> on every overlay, so it must not move. */
+function checkStillWebp(b: Uint8Array, maxBytes: number, side: number): ImportError | null {
+  if (sniffImage(b) !== 'webp' || isAnimatedWebp(b)) return 'type';
+  if (b.length > maxBytes) return 'size';
+  const size = webpSize(b);
+  return size && longest(size) <= side ? null : 'type';
 }
 
 /** The still the settings window encoded: a still WebP of at most STILL_MAX_BYTES and STILL_SIDE px. */
-export function checkStill(b: Uint8Array): ImportError | null {
-  if (sniffImage(b) !== 'webp' || isAnimatedWebp(b)) return 'type'; // the still is served as an <img> on every overlay: it must not move
-  if (b.length > STILL_MAX_BYTES) return 'size';
-  const size = webpSize(b);
-  return size && longest(size) <= STILL_SIDE ? null : 'type';
-}
+export const checkStill = (b: Uint8Array): ImportError | null => checkStillWebp(b, STILL_MAX_BYTES, STILL_SIDE);
+
+/** The HD still: a still WebP of at most HD_MAX_BYTES and HD_SIDE px. */
+export const checkHd = (b: Uint8Array): ImportError | null => checkStillWebp(b, HD_MAX_BYTES, HD_SIDE);
 
 /** The original animation: a GIF or WebP, small enough to decode on every emote. */
 function checkAnim(b: Uint8Array): ImportError | null {
@@ -53,8 +63,9 @@ export function checkSound(b: Uint8Array): SoundError | null {
 }
 
 /**
- * What an emote looks like on screen. A room member's imported emote shows as its still when it is one of ours too, or,
- * through `cacheHas`, when its still arrived over the room. Anything else is the placeholder.
+ * What an emote looks like on screen. A room member's imported emote shows as its HD still (the still until the HD has
+ * arrived) when it is one of ours too, or, through `cacheHas`, when its still arrived over the room. Anything else is the
+ * placeholder.
  */
 export function resolveEmoteArt(ref: EmoteRef, custom: readonly CustomEmote[], remote: boolean, cacheHas: (hash: string) => boolean = () => false): EmoteArt {
   if (isBundledEmote(ref)) return { kind: 'bundled', slug: ref };
@@ -64,15 +75,15 @@ export function resolveEmoteArt(ref: EmoteRef, custom: readonly CustomEmote[], r
   if (emote) {
     const animated = emote.animated && !remote;
     const sound = emote.sound && !remote ? { sound: customSoundUrl(hash) } : {};
-    return { kind: 'custom', url: animated ? customAnimUrl(hash) : customStillUrl(hash), animated, ...sound, fx: emote.fx ?? 0 };
+    return { kind: 'custom', url: animated ? customAnimUrl(hash) : customHdUrl(hash), animated, ...sound, fx: emote.fx ?? 0 };
   }
   // A friend's cached still has no entry here, so the plain pop is its default; the sender's message can still carry their fx.
-  return remote && cacheHas(hash) ? { kind: 'custom', url: customStillUrl(hash), animated: false, fx: 0 } : { kind: 'placeholder' };
+  return remote && cacheHas(hash) ? { kind: 'custom', url: customHdUrl(hash), animated: false, fx: 0 } : { kind: 'placeholder' };
 }
 
 /**
- * Imported emotes on disk: `<hash>.webp` (the still), `<hash>.anim.gif|webp` (the original animation) and
- * `<hash>.sound.ogg|mp3|wav` in `dir`.
+ * Imported emotes on disk: `<hash>.webp` (the still), `<hash>.hd.webp` (the HD still), `<hash>.anim.gif|webp` (the
+ * original animation) and `<hash>.sound.ogg|mp3|wav` in `dir`.
  * Everything that arrives is checked again here, whatever the settings window already checked, and the id is computed here.
  */
 export class EmoteLibrary {
@@ -82,17 +93,23 @@ export class EmoteLibrary {
   async save(file: EmoteFile, existing: readonly CustomEmote[]): Promise<SaveResult> {
     const f = emoteFileFrom(file);
     if (!f) return fail('type');
-    const error = checkStill(f.still) ?? (f.anim ? checkAnim(f.anim) : null);
+    const error = checkStill(f.still) ?? (f.hd ? checkHd(f.hd) : null) ?? (f.anim ? checkAnim(f.anim) : null);
     if (error) return fail(error);
-    const hash = createHash('sha256').update(f.still).digest('hex').slice(0, 32);
+    // Friends trust the HD because the still names it: a still naming another HD, or one with nothing behind it, is refused.
+    if (linkedHd(f.still) !== (f.hd ? emoteHash(f.hd) : null)) return fail('type');
+    const hash = emoteHash(f.still);
     const id = `c:${hash}`;
     if (existing.some((c) => c.id === id)) return fail('duplicate');
     if (existing.length >= MAX_CUSTOM_EMOTES) return fail('full');
 
     const animName = f.anim ? `${hash}.anim.${sniffImage(f.anim)}` : null;
-    const files = [{ name: `${hash}.webp`, data: f.still }, ...(f.anim && animName ? [{ name: animName, data: f.anim }] : [])];
+    const files = [
+      { name: `${hash}.webp`, data: f.still },
+      ...(f.hd ? [{ name: `${hash}.hd.webp`, data: f.hd }] : []),
+      ...(f.anim && animName ? [{ name: animName, data: f.anim }] : []),
+    ];
     // Files left by an earlier copy of this image: an animation in the other format would be served instead of this one.
-    const stale = [`${hash}.anim.gif`, `${hash}.anim.webp`].filter((n) => n !== animName);
+    const stale = [`${hash}.hd.webp`, `${hash}.anim.gif`, `${hash}.anim.webp`].filter((n) => !files.some((out) => out.name === n));
     try {
       await this.write(files, stale);
     } catch (err) {
@@ -129,7 +146,7 @@ export class EmoteLibrary {
   async remove(id: EmoteRef): Promise<void> {
     if (!isCustomRef(id)) return;
     const hash = customHash(id);
-    await Promise.all([`${hash}.webp`, `${hash}.anim.gif`, `${hash}.anim.webp`, ...soundNames(hash)].map((n) =>
+    await Promise.all([`${hash}.webp`, `${hash}.hd.webp`, `${hash}.anim.gif`, `${hash}.anim.webp`, ...soundNames(hash)].map((n) =>
       rm(join(this.dir, n), { force: true }).catch((err: Error) => console.warn('[emotes] could not delete', n, err.message))));
   }
 

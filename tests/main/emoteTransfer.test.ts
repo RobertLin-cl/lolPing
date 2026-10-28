@@ -4,19 +4,29 @@ import {
   ASSEMBLY_TIMEOUT_MS, EMOTE_CHUNK_BYTES, EmoteTransfer, LAN_TOTAL_CHUNKS_PER_TICK, MAX_ASSEMBLIES, MAX_PENDING_BYTES,
   REASKS_MAX, type EmoteTransferDeps,
 } from '../../src/main/emoteTransfer';
-import type { ChunkMsg, WantMsg } from '../../src/shared/roomProtocol';
+import { linkHd, linkedHd } from '../../src/shared/hdLink';
+import { HD_CHUNKS_MAX, type ChunkMsg, type WantMsg } from '../../src/shared/roomProtocol';
 
 const ascii = (s: string): number[] => [...s].map((c) => c.charCodeAt(0));
 const le16 = (n: number): number[] => [n & 0xff, (n >> 8) & 0xff];
 const le32 = (n: number): number[] => [n & 0xff, (n >>> 8) & 0xff, (n >>> 16) & 0xff, (n >>> 24) & 0xff];
 
 /** A lossy WebP still whose headers are all the checks read; `size` lets a test build a multi-chunk file. */
-const still = (size = 600, seed = 7): Uint8Array => {
+const still = (size = 600, seed = 7, w = 160, h = 120): Uint8Array => {
   const out = new Uint8Array(size).fill(seed);
-  out.set([...ascii('RIFF'), ...le32(size - 8), ...ascii('WEBPVP8 '), ...le32(size - 20), 0x30, 0x01, 0x00, 0x9d, 0x01, 0x2a, ...le16(160), ...le16(120)]);
+  out.set([...ascii('RIFF'), ...le32(size - 8), ...ascii('WEBPVP8 '), ...le32(size - 20), 0x30, 0x01, 0x00, 0x9d, 0x01, 0x2a, ...le16(w), ...le16(h)]);
   return out;
 };
 const hashOf = (b: Uint8Array): string => createHash('sha256').update(b).digest('hex').slice(0, 32);
+/** An HD still: the same headers at 512 x 384. */
+const hdStill = (size = EMOTE_CHUNK_BYTES * 3, seed = 7): Uint8Array => still(size, seed, 512, 384);
+/** The still that links `hd`, as an import writes it. */
+const linkedStill = (hd: Uint8Array, seed = 7): Uint8Array => linkHd(still(600, seed), hashOf(hd))!;
+/** `bytes` as the chunks a sender would send for `h`. */
+const chunksOf = (h: string, bytes: Uint8Array, peer = ANNOUNCER): ChunkMsg[] => {
+  const n = Math.ceil(bytes.length / EMOTE_CHUNK_BYTES);
+  return Array.from({ length: n }, (_, i) => chunkOf(h, i, n, bytes.subarray(i * EMOTE_CHUNK_BYTES, (i + 1) * EMOTE_CHUNK_BYTES), peer));
+};
 
 /** The member whose custom emote we are receiving. */
 const ANNOUNCER = 'aaaaaaaaaaaaaaaa';
@@ -35,6 +45,9 @@ function harness() {
   const out: Out[] = [];
   const files = new Map<string, Uint8Array>();
   const cache = new Map<string, Uint8Array>();
+  /** Our own HDs and the received ones, by the hash of the still that links each. */
+  const hdFiles = new Map<string, Uint8Array>();
+  const hdCache = new Map<string, Uint8Array>();
   const routes = new Map<string, 'lan' | 'shared' | null>();
   const reads = { still: 0 };
   const state = { enabled: true, tokens: 10, announced: [] as string[] };
@@ -45,9 +58,16 @@ function harness() {
       reads.still++;
       return files.get(h) ?? null;
     },
+    link: (h) => {
+      const b = files.get(h) ?? cache.get(h);
+      return b ? linkedHd(b) : null;
+    },
+    haveHd: (h) => hdFiles.has(h) || hdCache.has(h),
+    hd: (h) => hdFiles.get(h) ?? null,
     announced: () => state.announced,
     enabled: () => state.enabled,
     put: (h, b) => void cache.set(h, b),
+    putHd: (h, b) => void hdCache.set(h, b),
     routeOf: (peer) => routes.get(peer) ?? null,
     sendToLan: (peer, body) => void out.push({ kind: 'lan', to: peer, body }),
     broadcastShared: (body) => void out.push({ kind: 'shared', body }),
@@ -55,7 +75,7 @@ function harness() {
   };
   const t = new EmoteTransfer(deps);
   return {
-    t, out, cache, files, routes, reads,
+    t, out, cache, files, hdFiles, hdCache, routes, reads,
     setEnabled: (on: boolean) => (state.enabled = on),
     setTokens: (n: number) => (state.tokens = n),
     setAnnounced: (list: string[]) => (state.announced = list),
@@ -378,5 +398,124 @@ describe('EmoteTransfer: audit regressions', () => {
     h.setAnnounced([hash]);
     for (let n = 0; n < 50; n++) h.t.onWant(wantOf(hash, []));
     expect(h.reads.still).toBe(1);
+  });
+});
+
+describe('EmoteTransfer: HD stills', () => {
+  const wants = (out: Out[]): unknown[] => out.filter((o) => o.body.t === 'want').map((o) => o.body.h);
+
+  it('asks for the HD a still links once the still is here, and keeps it under the still’s hash', () => {
+    const h = harness();
+    const hd = hdStill();
+    const s = linkedStill(hd);
+    h.routes.set(ANNOUNCER, 'lan');
+    h.t.announced(ANNOUNCER, [hashOf(s)]);
+    expect(wants(h.out)).toEqual([hashOf(s)]); // the still first: the HD's hash is only known from it
+
+    for (const c of chunksOf(hashOf(s), s)) h.t.onChunk(c);
+    expect(wants(h.out)).toEqual([hashOf(s), hashOf(hd)]);
+    for (const c of chunksOf(hashOf(hd), hd)) h.t.onChunk(c);
+    expect(h.hdCache.get(hashOf(s))).toEqual(hd);
+    expect(h.t.stats.assembling).toBe(0);
+
+    h.t.announced(ANNOUNCER, [hashOf(s)]); // the next presence asks for nothing: both are here
+    expect(wants(h.out)).toHaveLength(2);
+  });
+
+  it('asks for no HD when the still links none', () => {
+    const h = harness();
+    const s = still();
+    h.routes.set(ANNOUNCER, 'lan');
+    h.t.announced(ANNOUNCER, [hashOf(s)]);
+    for (const c of chunksOf(hashOf(s), s)) h.t.onChunk(c);
+    h.t.announced(ANNOUNCER, [hashOf(s)]);
+    expect(wants(h.out)).toEqual([hashOf(s)]);
+  });
+
+  it('keeps an HD only when it hashes back to the link and passes the HD checks', () => {
+    const h = harness();
+    const hd = hdStill();
+    const s = linkedStill(hd);
+    h.cache.set(hashOf(s), s);
+    h.routes.set(ANNOUNCER, 'lan');
+    h.t.announced(ANNOUNCER, [hashOf(s)]);
+    for (const c of chunksOf(hashOf(hd), hdStill(EMOTE_CHUNK_BYTES * 3, 9))) h.t.onChunk(c); // other bytes under its hash
+    expect(h.hdCache.size).toBe(0);
+
+    const big = still(EMOTE_CHUNK_BYTES * 3, 7, 513, 100); // past 512 px
+    const h2 = harness();
+    const s2 = linkedStill(big);
+    h2.cache.set(hashOf(s2), s2);
+    h2.routes.set(ANNOUNCER, 'lan');
+    h2.t.announced(ANNOUNCER, [hashOf(s2)]);
+    for (const c of chunksOf(hashOf(big), big)) h2.t.onChunk(c);
+    expect(h2.hdCache.size).toBe(0);
+  });
+
+  it('asks each member for one HD at a time, and for the next when one is in', () => {
+    const h = harness();
+    const hds = [hdStill(EMOTE_CHUNK_BYTES * 3, 1), hdStill(EMOTE_CHUNK_BYTES * 3, 2)];
+    const stills = hds.map((hd, i) => linkedStill(hd, i + 1));
+    for (const s of stills) h.cache.set(hashOf(s), s);
+    h.routes.set(ANNOUNCER, 'lan');
+    h.t.announced(ANNOUNCER, stills.map(hashOf));
+    expect(wants(h.out)).toEqual([hashOf(hds[0])]);
+    h.t.announced(ANNOUNCER, stills.map(hashOf)); // another presence doesn't open a second one
+    expect(wants(h.out)).toEqual([hashOf(hds[0])]);
+
+    for (const c of chunksOf(hashOf(hds[0]), hds[0])) h.t.onChunk(c);
+    expect(wants(h.out)).toEqual([hashOf(hds[0]), hashOf(hds[1])]);
+  });
+
+  it('takes HD chunks only from a member whose announced still links them, and no more than an HD’s chunk count', () => {
+    const h = harness();
+    const hd = hdStill();
+    const s = linkedStill(hd);
+    h.cache.set(hashOf(s), s);
+    h.routes.set(ANNOUNCER, null); // the want can't go: whatever arrives, nobody here asked for it
+    h.t.announced(ANNOUNCER, [hashOf(s)]);
+    for (const c of chunksOf(hashOf(hd), hd, 'cccccccccccccccc')) h.t.onChunk(c); // a member who never announced it
+    expect(h.hdCache.size).toBe(0);
+    h.t.onChunk(chunkOf(hashOf(hd), 0, HD_CHUNKS_MAX + 1, hd.subarray(0, EMOTE_CHUNK_BYTES)));
+    h.t.onChunk(chunkOf(hashOf(s), 0, 18, s.subarray(0, 10))); // a still is at most 17 chunks
+    expect(h.t.stats.assembling).toBe(1); // only the HD assembly opened at announce, still empty
+    for (const c of chunksOf(hashOf(hd), hd)) h.t.onChunk(c);
+    expect(h.hdCache.get(hashOf(s))).toEqual(hd);
+  });
+
+  it('serves the HD of a still we announce, after every still that is waiting', async () => {
+    const h = harness();
+    const hd = hdStill();
+    const s = linkedStill(hd);
+    const plain = still(EMOTE_CHUNK_BYTES * 2, 3);
+    h.files.set(hashOf(s), s);
+    h.hdFiles.set(hashOf(s), hd);
+    h.files.set(hashOf(plain), plain);
+    h.routes.set(REQUESTER, 'shared');
+    h.setAnnounced([hashOf(s), hashOf(plain)]);
+    h.out.length = 0;
+
+    h.t.onWant(wantOf(hashOf(hd), []));
+    h.t.onWant(wantOf(hashOf(plain), []));
+    for (let n = 0; n < 5; n++) {
+      h.setTokens(6); // one chunk a tick, as on a busy relay
+      await vi.advanceTimersByTimeAsync(100);
+    }
+    const order = h.out.filter((o) => o.body.t === 'chunk').map((o) => o.body.h);
+    expect(order).toEqual([hashOf(plain), hashOf(plain), hashOf(hd), hashOf(hd), hashOf(hd)]);
+    expect(sentFile(h.out, hashOf(hd))).toEqual(hd);
+  });
+
+  it('never serves an HD whose still is not in our current announcement', async () => {
+    const h = harness();
+    const hd = hdStill();
+    const s = linkedStill(hd);
+    h.files.set(hashOf(s), s);
+    h.hdFiles.set(hashOf(s), hd);
+    h.routes.set(REQUESTER, 'lan');
+    h.setAnnounced([]);
+    h.t.onWant(wantOf(hashOf(hd), []));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(h.out).toHaveLength(0);
   });
 });

@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_PACKET, open, seal } from '../../src/main/roomCrypto';
+import { HD_MAX_BYTES } from '../../src/shared/emotes';
 import {
   isTagColor, isTagRgb, nearestTagColor, readableTagRgb, sameTagRgb, TAG_COLORS, tagColorCss, tagHex, tagRgbFromHex, tagWire,
 } from '../../src/shared/roomColors';
 import {
-  clampNameInput, decodeMessage, decodeSigned, encodeMessage, joinSigned, splitSigned, isOlderThan, isVoteId, MAX_TEXT, sanitizeName, sanitizeText, validateMessage,
+  clampNameInput, decodeMessage, decodeSigned, encodeMessage, HD_CHUNKS_MAX, joinSigned, splitSigned, isOlderThan, isVoteId, MAX_TEXT, sanitizeName, sanitizeText, validateMessage,
   WHISPER_B64_MAX, type AliveMsg, type BallotMsg, type ChunkMsg, type EmoteMsg, type PingMsg, type PresenceMsg, type RoomMessage,
   type TextMsg, type VoteMsg, type WantMsg, type WhisperMsg,
 } from '../../src/shared/roomProtocol';
@@ -280,10 +281,10 @@ describe('want and chunk messages', () => {
     ['hash upper-case', { ...want, h: hash.toUpperCase() }],
     ['need not an array', { ...want, need: 0 }],
     ['need over 64 entries', { ...want, need: Array(65).fill(0) }],
-    ['need index at the chunk max', { ...want, need: [17] }],
+    ['need index at an HD’s chunk max', { ...want, need: [66] }],
     ['need index negative', { ...want, need: [-1] }],
     ['chunk count 0', { ...chunk, n: 0 }],
-    ['chunk count 18', { ...chunk, n: 18 }],
+    ['chunk count 67', { ...chunk, n: 67 }],
     ['index at the count', { ...chunk, i: 17 }],
     ['index above the count', { ...chunk, n: 3, i: 3 }],
     ['base64 over 1000 characters', { ...chunk, b: 'QQ'.repeat(501) }],
@@ -297,6 +298,13 @@ describe('want and chunk messages', () => {
   it('accepts an empty need (all of it) and a full-size chunk', () => {
     expect(validateMessage({ ...want, need: [] })).toMatchObject({ need: [] });
     expect(validateMessage(chunk)).toEqual(chunk);
+  });
+
+  it('accepts the chunks of a full HD still, and the indexes a want for one can list', () => {
+    expect(HD_CHUNKS_MAX * 750).toBeGreaterThanOrEqual(HD_MAX_BYTES);
+    expect((HD_CHUNKS_MAX - 1) * 750).toBeLessThan(HD_MAX_BYTES);
+    expect(validateMessage({ ...chunk, n: HD_CHUNKS_MAX, i: HD_CHUNKS_MAX - 1 })).toMatchObject({ n: 66, i: 65 });
+    expect(validateMessage({ ...want, need: [17, 65] })).toMatchObject({ need: [17, 65] });
   });
 });
 

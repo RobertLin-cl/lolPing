@@ -95,14 +95,17 @@ export interface BallotMsg extends Base {
   id: string;
   yes: boolean;
 }
-/** Added in 0.5.2: asks the peer named `to` for the still of custom emote `h`. `need` lists chunk indexes, [] = all of them. */
+/**
+ * Added in 0.5.2: asks the peer named `to` for the still of custom emote `h`, or, after 0.6.2, for the HD still whose
+ * hash `h` is. `need` lists chunk indexes, [] = all of them.
+ */
 export interface WantMsg extends Base {
   t: 'want';
   to: string;
   h: string;
   need: number[];
 }
-/** Added in 0.5.2: one slice `i` of `n` of the still `h`, base64 in `b`. A chunk's sealed packet stays under MAX_PACKET. */
+/** Added in 0.5.2: one slice `i` of `n` of the still (or HD still) `h`, base64 in `b`. A chunk's sealed packet stays under MAX_PACKET. */
 export interface ChunkMsg extends Base {
   t: 'chunk';
   h: string;
@@ -160,7 +163,12 @@ const isUnit = (v: unknown): v is number => typeof v === 'number' && v >= 0 && v
 /** Chunk `b` is at most this many base64 characters (750 bytes); 17 chunks carry a full 12 KB still. */
 export const EMOTE_CHUNK_B64_MAX = 1000;
 export const EMOTE_CHUNKS_MAX = 17;
-/** Chunk indexes in a `want`'s `need`: at most this many entries, each below EMOTE_CHUNKS_MAX. */
+/**
+ * Added after 0.6.2: 66 chunks carry a full 48 KB HD still, so a chunk's `n` and a want's indexes go up to this. Older
+ * apps drop a message past 17 and never ask for an HD.
+ */
+export const HD_CHUNKS_MAX = 66;
+/** Chunk indexes in a `want`'s `need`: at most this many entries, each below HD_CHUNKS_MAX. */
 export const EMOTE_NEED_MAX = 64;
 const B64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
 /**
@@ -253,13 +261,13 @@ export function validateMessage(raw: unknown): RoomMessage | null {
       const { to, h, need } = raw;
       if (typeof to !== 'string' || !/^[0-9a-f]{16}$/.test(to) || typeof h !== 'string' || !HASH_RE.test(h)) return null;
       if (!Array.isArray(need) || need.length > EMOTE_NEED_MAX) return null;
-      if (!need.every((v) => isUint(v) && (v as number) < EMOTE_CHUNKS_MAX)) return null;
+      if (!need.every((v) => isUint(v) && (v as number) < HD_CHUNKS_MAX)) return null;
       return { t, ...base, to, h, need: [...new Set(need)] };
     }
     case 'chunk': {
       const { h, i, n, b } = raw;
       if (typeof h !== 'string' || !HASH_RE.test(h)) return null;
-      if (!isUint(n) || (n as number) < 1 || (n as number) > EMOTE_CHUNKS_MAX) return null;
+      if (!isUint(n) || (n as number) < 1 || (n as number) > HD_CHUNKS_MAX) return null;
       if (!isUint(i) || (i as number) >= (n as number)) return null;
       if (typeof b !== 'string' || b.length > EMOTE_CHUNK_B64_MAX || b.length % 4 !== 0 || !B64_RE.test(b)) return null;
       return { t, ...base, h, i: i as number, n: n as number, b };

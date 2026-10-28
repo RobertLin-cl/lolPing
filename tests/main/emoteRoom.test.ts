@@ -3,11 +3,12 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { EmoteCache } from '../../src/main/emoteCache';
+import { EmoteCache, HD_CACHE } from '../../src/main/emoteCache';
 import { EmoteTransfer } from '../../src/main/emoteTransfer';
 import { LanTransport } from '../../src/main/lanTransport';
 import { deriveRoomKeys } from '../../src/main/roomCrypto';
 import { RoomManager } from '../../src/main/roomManager';
+import { linkHd, linkedHd } from '../../src/shared/hdLink';
 import { makeRoomCode } from '../../src/shared/roomCode';
 
 // Two rooms on loopback, as the lanRoom test does: no broadcast, so each transport seeds the other's port.
@@ -20,11 +21,12 @@ const CODE = makeRoomCode(randomBytes(9));
 const ascii = (s: string): number[] => [...s].map((c) => c.charCodeAt(0));
 const le16 = (n: number): number[] => [n & 0xff, (n >> 8) & 0xff];
 const le32 = (n: number): number[] => [n & 0xff, (n >>> 8) & 0xff, (n >>> 16) & 0xff, (n >>> 24) & 0xff];
-const still = (size = 3000, seed = 7): Uint8Array => {
+const still = (size = 3000, seed = 7, w = 160, h = 120): Uint8Array => {
   const out = new Uint8Array(size).fill(seed);
-  out.set([...ascii('RIFF'), ...le32(size - 8), ...ascii('WEBPVP8 '), ...le32(size - 20), 0x30, 0x01, 0x00, 0x9d, 0x01, 0x2a, ...le16(160), ...le16(120)]);
+  out.set([...ascii('RIFF'), ...le32(size - 8), ...ascii('WEBPVP8 '), ...le32(size - 20), 0x30, 0x01, 0x00, 0x9d, 0x01, 0x2a, ...le16(w), ...le16(h)]);
   return out;
 };
+const hashOf = (b: Uint8Array): string => createHash('sha256').update(b).digest('hex').slice(0, 32);
 
 async function until(cond: () => boolean, ms = 8000): Promise<void> {
   const end = Date.now() + ms;
@@ -38,6 +40,7 @@ interface Side {
   room: RoomManager;
   transfer: EmoteTransfer;
   cache: EmoteCache;
+  hdCache: EmoteCache;
   dir: string;
   files: Map<string, Uint8Array>;
 }
@@ -46,7 +49,15 @@ function side(port: number, other: number, name: string, announced: () => string
   const dir = mkdtempSync(join(tmpdir(), 'lolping-room-emotes-'));
   const libraryDir = join(dir, 'emotes');
   const cache = new EmoteCache(join(dir, 'emote-cache'), Date.now);
+  const hdCache = new EmoteCache(cache.dir, Date.now, HD_CACHE);
   const files = new Map<string, Uint8Array>();
+  const read = (file: string): Uint8Array | null => {
+    try {
+      return new Uint8Array(readFileSync(file));
+    } catch {
+      return null;
+    }
+  };
   const lan = new LanTransport({ port, bindAddress: '127.0.0.1', broadcast: false, seeds: [{ host: '127.0.0.1', port: other }] });
   const room = new RoomManager({
     transports: [lan],
@@ -61,16 +72,17 @@ function side(port: number, other: number, name: string, announced: () => string
   const transfer = new EmoteTransfer({
     now: Date.now,
     enabled: () => true,
-    have: (h) => files.has(h) || cache.has(h),
-    still: (h) => {
-      try {
-        return new Uint8Array(readFileSync(join(libraryDir, `${h}.webp`)));
-      } catch {
-        return null;
-      }
+    have: (h) => files.has(h) || existsSync(join(libraryDir, `${h}.webp`)) || cache.has(h), // the library, as in the app
+    still: (h) => read(join(libraryDir, `${h}.webp`)),
+    link: (h) => {
+      const s = read(join(libraryDir, `${h}.webp`)) ?? read(join(cache.dir, `${h}.webp`));
+      return s && linkedHd(s);
     },
+    haveHd: (h) => hdCache.has(h),
+    hd: (h) => read(join(libraryDir, `${h}.hd.webp`)),
     announced,
     put: (h, b) => void cache.put(h, b),
+    putHd: (h, b) => void hdCache.put(h, b),
     routeOf: (peer) => room.routeKind(peer),
     sendToLan: (peer, body) => room.sendToLan(peer, body),
     broadcastShared: (body) => room.broadcastShared(body),
@@ -80,7 +92,7 @@ function side(port: number, other: number, name: string, announced: () => string
   room.on('want', (w: Parameters<EmoteTransfer['onWant']>[0]) => transfer.onWant(w));
   room.on('chunk', (c: Parameters<EmoteTransfer['onChunk']>[0]) => transfer.onChunk(c));
   room.on('memberGone', (peer: string) => transfer.memberGone(peer));
-  return { room, transfer, cache, dir, files };
+  return { room, transfer, cache, hdCache, dir, files };
 }
 
 let open: Side[] = [];
@@ -110,5 +122,22 @@ describe('a custom emote still travels over real UDP', () => {
     const got = join(b.dir, 'emote-cache', `${hash}.webp`);
     expect(existsSync(got)).toBe(true);
     expect(new Uint8Array(readFileSync(got))).toEqual(bytes);
+  }, 20_000);
+
+  it('brings the HD the still links after it, verified, into the HD cache', async () => {
+    const hd = still(30_000, 9, 512, 384); // 40 chunks: more than a still may have
+    const bytes = linkHd(still(3000), hashOf(hd))!;
+    const hash = hashOf(bytes);
+    const a = side(A_PORT, B_PORT, 'Ana', () => [hash]);
+    mkdirSync(join(a.dir, 'emotes'), { recursive: true });
+    writeFileSync(join(a.dir, 'emotes', `${hash}.webp`), bytes);
+    writeFileSync(join(a.dir, 'emotes', `${hash}.hd.webp`), hd);
+    const b = side(B_PORT, A_PORT, 'Ben', () => []);
+    open.push(a, b);
+    await Promise.all([a.room.join(CODE), b.room.join(CODE)]);
+
+    await until(() => b.hdCache.has(hash));
+    expect(new Uint8Array(readFileSync(join(b.dir, 'emote-cache', `${hash}.hd.webp`)))).toEqual(hd);
+    expect(b.cache.has(hash)).toBe(true); // the still came first
   }, 20_000);
 });

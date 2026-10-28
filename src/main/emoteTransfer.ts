@@ -1,6 +1,6 @@
-import { createHash } from 'node:crypto';
-import { type ChunkMsg, type WantMsg } from '../shared/roomProtocol';
-import { checkStill } from './emoteLibrary';
+import { linkedHd } from '../shared/hdLink';
+import { EMOTE_CHUNKS_MAX, EMOTE_NEED_MAX, HD_CHUNKS_MAX, type ChunkMsg, type WantMsg } from '../shared/roomProtocol';
+import { checkHd, checkStill, emoteHash } from './emoteLibrary';
 
 /** One chunk carries this many bytes: 1,000 base64 characters, and a sealed chunk stays under the 1,200-byte packet cap. */
 export const EMOTE_CHUNK_BYTES = 750;
@@ -18,7 +18,13 @@ export const LAN_CHUNKS_PER_TICK = 2;
 export const LAN_TOTAL_CHUNKS_PER_TICK = 8;
 export const RELAY_KEEP_TOKENS = 5;
 
-interface Assembly {
+/** What a hash names in a room: an announced still (`still` is the hash itself), or the HD that still links to. */
+interface Target {
+  still: string;
+  hd: boolean;
+}
+
+interface Assembly extends Target {
   /** Chunk count, from the first chunk. 0 until then: a want sent, no bytes yet. */
   n: number;
   parts: Map<number, Uint8Array>;
@@ -32,7 +38,7 @@ interface Assembly {
   reasks: number;
 }
 
-interface SendQueue {
+interface SendQueue extends Target {
   bytes: Uint8Array;
   n: number;
   /** LAN requesters: chunks go unicast, at most LAN_CHUNKS_PER_TICK per requester per tick. */
@@ -47,12 +53,20 @@ export interface EmoteTransferDeps {
   have(hash: string): boolean;
   /** Our own still for `hash`, when it is one of our announced emotes. */
   still(hash: string): Uint8Array | null;
+  /** The hash of the HD that the still `hash`, which is here, links to (see hdLink), or null when it links none. */
+  link(hash: string): string | null;
+  /** The HD of the still `hash` is here already: our own, or the cache's. */
+  haveHd(hash: string): boolean;
+  /** Our own HD of the still `hash`. */
+  hd(hash: string): Uint8Array | null;
   /** The hashes our presence announces right now. */
   announced(): readonly string[];
   /** The Show friends' custom emotes switch. */
   enabled(): boolean;
   /** Keeps a still that passed the hash and image checks. */
   put(hash: string, bytes: Uint8Array): void;
+  /** Keeps the HD of the still `hash`, once it passed the checks against the hash that still links. */
+  putHd(hash: string, bytes: Uint8Array): void;
   /** How a member is reached right now: a LAN unicast, a relay broadcast, or neither. */
   routeOf(peer: string): 'lan' | 'shared' | null;
   sendToLan(peer: string, body: Record<string, unknown>): void;
@@ -62,9 +76,10 @@ export interface EmoteTransferDeps {
 }
 
 /**
- * Moves custom emote stills over a room, both ways. The ID is the SHA-256 prefix of the still, so a finished assembly
- * that doesn't hash back to it is dropped: nobody can substitute another member's image. Bytes are only ever written to
- * the cache as `<hash>.webp` and only ever decoded by Chromium as an image; nothing here executes them.
+ * Moves custom emote stills over a room, both ways, and after each still the HD still it links to. The ID is the
+ * SHA-256 prefix of the still, and the still names its HD's, so a finished assembly that doesn't hash back to what it
+ * was asked for is dropped: nobody can substitute another member's image. Bytes are only ever written to the cache as
+ * `<hash>.webp` or `<hash>.hd.webp` and only ever decoded by Chromium as an image; nothing here executes them.
  *
  * RoomManager emits 'emotes' (a presence's announced hashes), 'want', 'chunk' and 'memberGone'; this class answers.
  */
@@ -72,6 +87,10 @@ export class EmoteTransfer {
   private readonly announcers = new Map<string, Set<string>>();
   private readonly assemblies = new Map<string, Assembly>();
   private readonly sends = new Map<string, SendQueue>();
+  /** The HD each still we have links to (null: none). A hash names its bytes, so what is read once stays true. */
+  private readonly links = new Map<string, string | null>();
+  /** HDs stored this session: the cache writes in the background, so haveHd can say no for a moment after. */
+  private readonly storedHds = new Set<string>();
   private readonly timer: NodeJS.Timeout;
 
   constructor(private readonly deps: EmoteTransferDeps) {
@@ -83,29 +102,35 @@ export class EmoteTransfer {
     clearInterval(this.timer);
   }
 
-  /** A presence announced `hashes`: prefetch whatever isn't here yet, on the announcer's route. */
+  /** A presence announced `hashes`: prefetch whatever isn't here yet, on the announcer's route, then the next HD. */
   announced(peer: string, hashes: readonly string[]): void {
     this.announcers.set(peer, new Set(hashes));
     if (!this.deps.enabled()) return;
     for (const hash of hashes) {
       if (this.deps.have(hash) || this.assemblies.has(hash)) continue;
       if (this.assemblies.size >= MAX_ASSEMBLIES) return;
-      const asked = this.sendWant(peer, hash, []);
-      this.assemblies.set(hash, { n: 0, parts: new Map(), bytes: 0, firstAt: this.deps.now(), lastAt: this.deps.now(), ask: peer, asked, reasks: 0 });
+      this.ask(peer, hash, { still: hash, hd: false });
     }
+    this.nextHd(peer);
   }
 
-  /** Another member asks for one of our stills. Only hashes in our own current announcement are served. */
+  /**
+   * Another member asks for one of our stills, or for the HD one of them links. Only what our own current announcement
+   * names is served.
+   */
   onWant(w: WantMsg): void {
     if (!this.deps.enabled()) return; // the switch stops both directions: nothing of ours leaves either
-    if (!this.deps.announced().includes(w.h)) return;
+    const announced = this.deps.announced();
+    const still = announced.includes(w.h) ? w.h : announced.find((s) => this.linkOf(s) === w.h);
+    if (still === undefined) return;
     const lane = this.deps.routeOf(w.peer);
     if (lane !== 'lan' && lane !== 'shared') return;
     let queue = this.sends.get(w.h);
     if (!queue) {
-      const bytes = this.deps.still(w.h); // read once per queue: a flood of wants can't make it read the disk each time
+      const hd = still !== w.h;
+      const bytes = hd ? this.deps.hd(still) : this.deps.still(w.h); // read once per queue: a flood of wants can't make it read the disk each time
       if (!bytes) return;
-      queue = { bytes, n: Math.ceil(bytes.length / EMOTE_CHUNK_BYTES), lan: new Map(), shared: new Set() };
+      queue = { still, hd, bytes, n: Math.ceil(bytes.length / EMOTE_CHUNK_BYTES), lan: new Map(), shared: new Set() };
       this.sends.set(w.h, queue);
     }
     const want = w.need.length > 0 ? w.need.filter((i) => i < queue.n) : Array.from({ length: queue.n }, (_, i) => i);
@@ -119,16 +144,20 @@ export class EmoteTransfer {
     }
   }
 
-  /** One slice of a still, from the member that announced the hash. Assemblies finish into the cache once verified. */
+  /**
+   * One slice of a still or an HD, from the member that announced it. Assemblies finish into the cache once verified.
+   * An HD another member asked for over the relays reaches us too, and is kept when its still is here.
+   */
   onChunk(c: ChunkMsg): void {
     if (!this.deps.enabled()) return;
-    if (!(this.announcers.get(c.peer)?.has(c.h) ?? false)) return; // only from a member who announced that hash
+    const target = this.targetOf(c.peer, c.h); // only from a member who announced that hash, or the still that links it
+    if (!target || c.n > (target.hd ? HD_CHUNKS_MAX : EMOTE_CHUNKS_MAX)) return;
     const part = Buffer.from(c.b, 'base64');
     let a = this.assemblies.get(c.h);
     if (!a) {
-      if (this.deps.have(c.h)) return; // already stored: a straggler chunk must not open a zombie assembly
+      if (this.isHere(target)) return; // already stored: a straggler chunk must not open a zombie assembly
       if (this.assemblies.size >= MAX_ASSEMBLIES || this.pendingBytes() + part.length > MAX_PENDING_BYTES) return;
-      a = { n: 0, parts: new Map(), bytes: 0, firstAt: this.deps.now(), lastAt: this.deps.now(), ask: c.peer, asked: true, reasks: 0 };
+      a = { ...target, n: 0, parts: new Map(), bytes: 0, firstAt: this.deps.now(), lastAt: this.deps.now(), ask: c.peer, asked: true, reasks: 0 };
       this.assemblies.set(c.h, a);
     }
     if (a.n === 0) a.n = c.n;
@@ -162,7 +191,10 @@ export class EmoteTransfer {
     return total;
   }
 
-  /** The finished assembly, in chunk order: kept only when it hashes back to its ID and is a still this app would import. */
+  /**
+   * The finished assembly, in chunk order: kept only when it hashes back to what was asked for and is a still (or an HD)
+   * this app would import. Then the announcer's next HD can come.
+   */
   private finish(hash: string, a: Assembly): void {
     this.assemblies.delete(hash);
     const full = new Uint8Array(a.bytes);
@@ -173,9 +205,64 @@ export class EmoteTransfer {
       full.set(part, at);
       at += part.length;
     }
-    if (createHash('sha256').update(full).digest('hex').slice(0, 32) !== hash) return;
-    if (checkStill(full) !== null) return;
-    this.deps.put(hash, full);
+    if (emoteHash(full) !== hash) return;
+    if (a.hd) {
+      if (checkHd(full) !== null) return;
+      this.storedHds.add(hash);
+      this.deps.putHd(a.still, full);
+    } else {
+      if (checkStill(full) !== null) return;
+      this.links.set(hash, linkedHd(full));
+      this.deps.put(hash, full);
+    }
+    this.nextHd(a.ask);
+  }
+
+  /** Opens an assembly for `hash` and asks `peer` for it. Over relays the want may wait for a spare ping token. */
+  private ask(peer: string, hash: string, target: Target): void {
+    const asked = this.sendWant(peer, hash, []);
+    this.assemblies.set(hash, { ...target, n: 0, parts: new Map(), bytes: 0, firstAt: this.deps.now(), lastAt: this.deps.now(), ask: peer, asked, reasks: 0 });
+  }
+
+  /**
+   * Asks `peer` for the next HD of a still it announced and we have, one at a time from each member: the stills come
+   * first, and the room's bandwidth is spread over the members instead of spent on one member's whole wheel.
+   */
+  private nextHd(peer: string): void {
+    const stills = this.announcers.get(peer);
+    if (!stills || !this.deps.enabled()) return;
+    for (const a of this.assemblies.values()) if (a.hd && a.ask === peer) return;
+    for (const still of stills) {
+      const hd = this.linkOf(still);
+      if (hd === null || this.assemblies.has(hd) || this.isHere({ still, hd: true })) continue;
+      if (this.assemblies.size < MAX_ASSEMBLIES) this.ask(peer, hd, { still, hd: true });
+      return;
+    }
+  }
+
+  /** What a chunk for `hash` from `peer` builds: a still that member announced, or the HD one of them links. */
+  private targetOf(peer: string, hash: string): Target | null {
+    const stills = this.announcers.get(peer);
+    if (!stills) return null;
+    if (stills.has(hash)) return { still: hash, hd: false };
+    for (const still of stills) if (this.linkOf(still) === hash) return { still, hd: true };
+    return null;
+  }
+
+  /** The HD the still `hash` links to, once the still is here; null before then, and when it links none. */
+  private linkOf(hash: string): string | null {
+    const known = this.links.get(hash);
+    if (known !== undefined) return known;
+    if (!this.deps.have(hash)) return null;
+    const link = this.deps.link(hash);
+    this.links.set(hash, link);
+    return link;
+  }
+
+  private isHere(t: Target): boolean {
+    if (!t.hd) return this.deps.have(t.still);
+    const hd = this.linkOf(t.still);
+    return (hd !== null && this.storedHds.has(hd)) || this.deps.haveHd(t.still);
   }
 
   /** False when it didn't go: no route, or no spare relay token (joining a room can find 9 hashes per member at once). */
@@ -203,8 +290,9 @@ export class EmoteTransfer {
       }
       let egress = 0; // chunks sent this tick, across every queue and requester
       const ours = new Set(this.deps.announced());
-      for (const [hash, q] of [...this.sends]) {
-        if (!ours.has(hash)) {
+      // Stills before HDs: a friend sees every image before any of them gets sharper.
+      for (const [hash, q] of [...this.sends].sort(([, a], [, b]) => Number(a.hd) - Number(b.hd))) {
+        if (!ours.has(q.still)) {
           this.sends.delete(hash); // the emote left our wheel: nobody may still be served it
           continue;
         }
@@ -227,7 +315,7 @@ export class EmoteTransfer {
       const now = this.deps.now();
       for (const [hash, a] of [...this.assemblies]) {
         if (a.n > 0 && a.parts.size === a.n) continue; // completes inside onChunk
-        if (now - a.firstAt >= ASSEMBLY_TIMEOUT_MS || !(this.announcers.get(a.ask)?.has(hash) ?? false)) {
+        if (now - a.firstAt >= ASSEMBLY_TIMEOUT_MS || !(this.announcers.get(a.ask)?.has(a.still) ?? false)) {
           this.assemblies.delete(hash);
           continue;
         }
@@ -241,7 +329,8 @@ export class EmoteTransfer {
           this.assemblies.delete(hash); // the next presence starts over
           continue;
         }
-        const need = a.n === 0 ? [] : Array.from({ length: a.n }, (_, i) => i).filter((i) => !a.parts.has(i));
+        // An HD can miss more indexes than one want may list: the rest are asked for once these are in.
+        const need = a.n === 0 ? [] : Array.from({ length: a.n }, (_, i) => i).filter((i) => !a.parts.has(i)).slice(0, EMOTE_NEED_MAX);
         if (!this.sendWant(a.ask, hash, need)) continue; // waits for a token: not a re-ask yet
         a.reasks++;
         a.lastAt = now;
