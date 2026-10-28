@@ -785,7 +785,7 @@ const en = {
   // room text
   aliveLine: (name: string) => `${name} - Alive`,
   textBoxPlaceholder: 'Say something to the room, Enter to send',
-  textBoxHint: 'Commands: /ff /noff /ready',
+  textBoxHint: 'Commands: /ff /noff /ready (Tab completes)',
   textBoxUnknown: 'Unknown command',
   textBoxVotesOff: 'Votes are off',
 
@@ -1551,7 +1551,7 @@ const zh: Strings = {
 
   aliveLine: (name) => `${name} - 存活`,
   textBoxPlaceholder: '对房间说点什么，Enter 发送',
-  textBoxHint: '指令：/ff /noff /ready',
+  textBoxHint: '指令：/ff /noff /ready（Tab 补全）',
   textBoxUnknown: '未知指令',
   textBoxVotesOff: '投票已关闭',
 

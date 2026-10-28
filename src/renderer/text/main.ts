@@ -2,6 +2,7 @@ import type { TextAnswer, TextBoxText } from '../../shared/ipc';
 import { tagColorCss } from '../../shared/roomColors';
 import type { HistoryLine } from '../../shared/roomHistory';
 import { MAX_TEXT } from '../../shared/roomProtocol';
+import { completeCommand, type CompletionCycle } from '../../shared/textCommands';
 
 const input = document.getElementById('message') as HTMLInputElement;
 const count = document.getElementById('count') as HTMLElement;
@@ -70,7 +71,11 @@ async function send(): Promise<void> {
 }
 
 // While an input method is composing, the box holds a draft: cutting it would break the composition, and Enter confirms it.
+/** Tab's place among the commands, while the box still shows its last completion. Typing starts it over. */
+let cycle: CompletionCycle | null = null;
+
 input.addEventListener('input', (event) => {
+  cycle = null;
   if (!(event as InputEvent).isComposing) clamp();
   if (words) showHint(words.hint, false);
 });
@@ -93,6 +98,12 @@ input.addEventListener('keydown', (event) => {
     input.blur();
   } else if (event.key === 'Tab') {
     event.preventDefault(); // focus leaving the box would leave Enter and Esc with nothing to hear them
+    const next = completeCommand(input.value, cycle, event.shiftKey);
+    if (next) {
+      input.value = next.value; // setting the value fires no 'input', so the cycle survives to the next press
+      cycle = next.cycle;
+      clamp();
+    }
   }
 });
 // Out of the box, wherever the keyboard is in the window (after a click on the log, say): Enter goes back in, Esc closes.
