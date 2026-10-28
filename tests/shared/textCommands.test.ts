@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_TEXT } from '../../src/shared/roomProtocol';
-import { commandMatches, completeCommand, parseTextInput } from '../../src/shared/textCommands';
+import type { RoomMember } from '../../src/shared/room';
+import { commandMatches, completeCommand, muteToggle, parseTextInput } from '../../src/shared/textCommands';
 
 describe('parseTextInput', () => {
   it('reads /ff and /surrender, in any case and with spaces around', () => {
@@ -42,7 +43,7 @@ describe('commandMatches', () => {
   it('offers the commands that start with what was typed, in any case', () => {
     expect(commandMatches('/r')).toEqual(['/ready']);
     expect(commandMatches('/N')).toEqual(['/noff']);
-    expect(commandMatches('/')).toEqual(['/ff', '/noff', '/ready', '/surrender']);
+    expect(commandMatches('/')).toEqual(['/ff', '/mute ', '/noff', '/ready', '/surrender']);
     expect(commandMatches('/ff')).toEqual(['/ff']);
   });
 
@@ -64,11 +65,11 @@ describe('completeCommand', () => {
   it('cycles through the matches on each press while the box shows its last completion, and wraps round', () => {
     let step = completeCommand('/', null);
     const seen: string[] = [];
-    for (let i = 0; i < 5 && step; i++) {
+    for (let i = 0; i < 6 && step; i++) {
       seen.push(step.value);
       step = completeCommand(step.value, step.cycle);
     }
-    expect(seen).toEqual(['/ff', '/noff', '/ready', '/surrender', '/ff']);
+    expect(seen).toEqual(['/ff', '/mute ', '/noff', '/ready', '/surrender', '/ff']);
   });
 
   it('cycles backwards with Shift+Tab, starting from the last match', () => {
@@ -88,5 +89,75 @@ describe('completeCommand', () => {
     expect(completeCommand('gg', null)).toBeNull();
     expect(completeCommand('/x', null)).toBeNull();
     expect(completeCommand('/ff now', null)).toBeNull();
+  });
+});
+
+describe('/mute', () => {
+  const member = (peer: string, name: string, extra: Partial<RoomMember> = {}): RoomMember => ({
+    peer, name, color: 0, rgb: null, path: 'lan', status: 'on', needsUpdate: false, noEmotes: false, noChat: false,
+    textOff: false, votesOff: false, muted: false, self: false, ...extra,
+  });
+  const members = [
+    member('me', 'Robert', { self: true }),
+    member('a', 'Ahri 小队长'),
+    member('b', 'Alex'),
+    member('c', 'Garen', { muted: true }),
+  ];
+
+  it('reads the name after /mute, keeping its spaces and case', () => {
+    expect(parseTextInput('/mute Ahri 小队长')).toEqual({ kind: 'mute', name: 'Ahri 小队长' });
+    expect(parseTextInput('/MUTE   alex  ')).toEqual({ kind: 'mute', name: 'alex' });
+    expect(parseTextInput('/mute')).toEqual({ kind: 'mute', name: '' });
+    expect(parseTextInput('/muted')).toEqual({ kind: 'unknown' });
+  });
+
+  it('completes /m to /mute and a space, and the next Tab goes on to the names', () => {
+    const names = ['Alex', 'Garen'];
+    const command = completeCommand('/m', null, false, names);
+    expect(command?.value).toBe('/mute ');
+    const name = command && completeCommand(command.value, command.cycle, false, names);
+    expect(name?.value).toBe('/mute Alex');
+    expect(name && completeCommand(name.value, name.cycle, false, names)?.value).toBe('/mute Garen');
+  });
+
+  it('keeps a lone completion as it is on further presses', () => {
+    const step = completeCommand('/mute ', null, false, ['Alex']);
+    expect(step?.value).toBe('/mute Alex');
+    expect(step && completeCommand(step.value, step.cycle, false, ['Alex'])?.value).toBe('/mute Alex');
+  });
+
+  it('cycles through the names after /mute, only those that start with what was typed', () => {
+    const names = ['Ahri 小队长', 'Alex', 'Garen'];
+    let step = completeCommand('/mute ', null, false, names);
+    const seen: string[] = [];
+    for (let i = 0; i < 4 && step; i++) {
+      seen.push(step.value);
+      step = completeCommand(step.value, step.cycle, false, names);
+    }
+    expect(seen).toEqual(['/mute Ahri 小队长', '/mute Alex', '/mute Garen', '/mute Ahri 小队长']);
+    expect(completeCommand('/mute al', null, false, names)?.value).toBe('/mute Alex');
+    expect(completeCommand('/mute x', null, false, names)).toBeNull();
+    expect(completeCommand('/mute ', null, false, [])).toBeNull();
+  });
+
+  it('offers a name two members share once', () => {
+    const step = completeCommand('/mute ', null, false, ['Player', 'Player']);
+    expect(step && completeCommand(step.value, step.cycle, false, ['Player', 'Player'])?.value).toBe('/mute Player');
+  });
+
+  it('mutes the member with that name, in any case, and never us', () => {
+    expect(muteToggle(members, 'alex')).toEqual({ peers: ['b'], on: true, name: 'Alex' });
+    expect(muteToggle(members, 'Robert')).toBeNull();
+    expect(muteToggle(members, 'Nobody')).toBeNull();
+    expect(muteToggle(members, '')).toBeNull();
+  });
+
+  it('unmutes a member who is muted already, as League does', () => {
+    expect(muteToggle(members, 'Garen')).toEqual({ peers: ['c'], on: false, name: 'Garen' });
+  });
+
+  it('treats members who share a name alike: muted unless every one of them already is', () => {
+    const twins = [member('x', 'Player', { muted: true }), member('y', 'Player')];
+    expect(muteToggle(twins, 'player')).toEqual({ peers: ['x', 'y'], on: true, name: 'Player' });
   });
 });

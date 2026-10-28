@@ -150,4 +150,4 @@ button.tag:hover { text-decoration: underline; }
 .line { padding: 3px 0; font-size: 13px; line-height: 1.4; color: var(--gold-1); overflow-wrap: anywhere; user-select: text; }
 .line .who { display: inline; margin-right: 6px; font-weight: 600; color: var(--tag); }
 .line .who::after { content: ":"; }
-.line.vote .said { color: var(--gold-3); }
+.line.vote .said, .line.note .said { color: var(--gold-3); }

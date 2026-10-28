@@ -13,6 +13,7 @@ const api: TextApi = {
     return () => ipcRenderer.removeListener('text:linesChanged', handler);
   },
   hover: (on) => ipcRenderer.send('text:hover', on === true),
+  names: () => ipcRenderer.invoke('text:names'),
 };
 
 contextBridge.exposeInMainWorld('textApi', api);

@@ -36,7 +36,7 @@ function showLines(lines: readonly HistoryLine[]): void {
   log.replaceChildren(...lines.map((line) => {
     const item = document.createElement('li');
     if (!line.tag) {
-      item.className = 'vote';
+      item.className = line.kind; // a vote result, or a note of what one of our commands did
       item.textContent = line.text;
       return item;
     }
@@ -68,11 +68,24 @@ async function send(): Promise<void> {
     if (words) showHint(words.hint, false);
   } else if (answer === 'unknown') showHint(words?.unknown ?? '', true);
   else if (answer === 'votesOff') showHint(words?.votesOff ?? '', true);
+  else if (answer === 'noMember') showHint(words?.noMember ?? '', true);
 }
 
 // While an input method is composing, the box holds a draft: cutting it would break the composition, and Enter confirms it.
 /** Tab's place among the commands, while the box still shows its last completion. Typing starts it over. */
 let cycle: CompletionCycle | null = null;
+
+/** One press of Tab: a command, or after /mute a member's name. The names are asked for at each press: people come and go. */
+async function completeInBox(back: boolean): Promise<void> {
+  const typed = input.value;
+  const names = await window.textApi.names();
+  if (input.value !== typed) return; // typed on while the names came: this press is stale
+  const next = completeCommand(typed, cycle, back, names);
+  if (!next) return;
+  input.value = next.value; // setting the value fires no 'input', so the cycle survives to the next press
+  cycle = next.cycle;
+  clamp();
+}
 
 input.addEventListener('input', (event) => {
   cycle = null;
@@ -98,12 +111,7 @@ input.addEventListener('keydown', (event) => {
     input.blur();
   } else if (event.key === 'Tab') {
     event.preventDefault(); // focus leaving the box would leave Enter and Esc with nothing to hear them
-    const next = completeCommand(input.value, cycle, event.shiftKey);
-    if (next) {
-      input.value = next.value; // setting the value fires no 'input', so the cycle survives to the next press
-      cycle = next.cycle;
-      clamp();
-    }
+    void completeInBox(event.shiftKey);
   }
 });
 // Out of the box, wherever the keyboard is in the window (after a click on the log, say): Enter goes back in, Esc closes.

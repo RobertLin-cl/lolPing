@@ -27,7 +27,7 @@ import type { ThreadRecord } from '../shared/teammate/history';
 import { openInRows, resumableProfile, resumeArgs } from '../shared/teammate/agentProfiles';
 import { wordsContinuesByDefault } from '../shared/teammate/threads';
 import type { HistoryState, MateAction, MateView } from '../shared/teammateIpc';
-import { parseTextInput } from '../shared/textCommands';
+import { muteToggle, parseTextInput } from '../shared/textCommands';
 import { updateErrorText, type UpdateState } from '../shared/update';
 import { registerAppScheme, serveAppScheme } from './appProtocol';
 import { resolveTarget, toShared } from './displayNumbers';
@@ -692,6 +692,15 @@ function start(): void {
           if (!roomVotes) return 'votesOff';
           if (roomVotes.current()?.kind === 'ff') roomVotes.answer(false);
           return 'sent';
+        case 'mute': {
+          const toggle = muteToggle(room.state().members, input.name);
+          if (!toggle) return 'noMember';
+          for (const peer of toggle.peers) room.muteMember(peer, toggle.on);
+          // A note in our own log only: nobody else hears about it, as with the mute button.
+          const t = text();
+          history.push({ at: Date.now(), kind: 'note', tag: null, text: toggle.on ? t.chatMuted(toggle.name) : t.chatUnmuted(toggle.name) });
+          return 'sent';
+        }
         default:
           return 'sent'; // nothing usable was typed
       }
@@ -700,10 +709,11 @@ function start(): void {
       const t = text();
       return {
         title: t.chatTitle, hide: t.chatHideButton, placeholder: t.textBoxPlaceholder, hint: t.textBoxHint, away: t.chatAway,
-        unknown: t.textBoxUnknown, votesOff: t.textBoxVotesOff,
+        unknown: t.textBoxUnknown, votesOff: t.textBoxVotesOff, noMember: t.textBoxNoMember,
       };
     },
     lines: () => history.lines(),
+    names: () => room.state().members.filter((m) => !m.self).map((m) => m.name),
     bounds: () => settings.chatBounds,
     saveBounds: (chatBounds) => void store.update({ chatBounds }),
     hideAfterMs: () => settings.chatHideS * 1000,

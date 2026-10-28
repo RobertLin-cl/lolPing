@@ -785,8 +785,11 @@ const en = {
   // room text
   aliveLine: (name: string) => `${name} - Alive`,
   textBoxPlaceholder: 'Say something to the room, Enter to send',
-  textBoxHint: 'Commands: /ff /noff /ready (Tab completes)',
+  textBoxHint: 'Commands: /ff /noff /ready /mute (Tab completes)',
   textBoxUnknown: 'Unknown command',
+  textBoxNoMember: 'No one in the room by that name',
+  chatMuted: (name: string) => `You muted ${name}`,
+  chatUnmuted: (name: string) => `You unmuted ${name}`,
   textBoxVotesOff: 'Votes are off',
 
   // room votes
@@ -1551,8 +1554,11 @@ const zh: Strings = {
 
   aliveLine: (name) => `${name} - 存活`,
   textBoxPlaceholder: '对房间说点什么，Enter 发送',
-  textBoxHint: '指令：/ff /noff /ready（Tab 补全）',
+  textBoxHint: '指令：/ff /noff /ready /mute（Tab 补全）',
   textBoxUnknown: '未知指令',
+  textBoxNoMember: '房间里没有这个名字的人',
+  chatMuted: (name) => `已将 ${name} 静音`,
+  chatUnmuted: (name) => `已取消 ${name} 的静音`,
   textBoxVotesOff: '投票已关闭',
 
   votesOff: '投票已关闭',

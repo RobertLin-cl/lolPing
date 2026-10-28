@@ -13,6 +13,8 @@ export interface ChatWindowDeps {
   submit(raw: string, at: Point): TextAnswer;
   strings(): TextBoxText;
   lines(): readonly HistoryLine[];
+  /** The other members' names, for Tab after /mute. */
+  names(): string[];
   /** Where the window was left, or null for its default spot. */
   bounds(): ChatBounds | null;
   saveBounds(b: ChatBounds): void;
@@ -56,6 +58,7 @@ export function registerTextWindow(d: ChatWindowDeps): void {
   });
   ipcMain.handle(TEXT_CH.strings, (event): TextBoxText | null => (own(event.sender) && deps ? deps.strings() : null));
   ipcMain.handle(TEXT_CH.lines, (event): HistoryLine[] => (own(event.sender) && deps ? [...deps.lines()] : []));
+  ipcMain.handle(TEXT_CH.names, (event): string[] => (own(event.sender) && deps ? deps.names() : []));
   ipcMain.on(TEXT_CH.hover, (event, on: unknown) => {
     if (own(event.sender)) autoHide.setHovered(on === true);
   });

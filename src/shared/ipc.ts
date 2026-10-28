@@ -119,7 +119,7 @@ export function parseMateGlow(raw: unknown): MateGlow | null {
 /** The room chat window: the log of this session's room lines and the box to type into. */
 export const TEXT_CH = {
   submit: 'text:submit', hide: 'text:hide', strings: 'text:strings', lines: 'text:lines', linesChanged: 'text:linesChanged',
-  hover: 'text:hover',
+  hover: 'text:hover', names: 'text:names',
 } as const;
 
 /** The chat window's words, in the language the app uses. */
@@ -137,10 +137,12 @@ export interface TextBoxText {
   unknown: string;
   /** Shown instead of the hint for a vote command while votes are switched off. */
   votesOff: string;
+  /** Shown instead of the hint when /mute named nobody in the room. */
+  noMember: string;
 }
 
 /** What the app made of a submit: 'sent' empties the box for the next line, the others keep the text with a hint. */
-export type TextAnswer = 'sent' | 'unknown' | 'votesOff';
+export type TextAnswer = 'sent' | 'unknown' | 'votesOff' | 'noMember';
 
 export interface TextApi {
   /** Resolves with the app's answer. The box keeps the keyboard either way, so several lines can be typed in a row. */
@@ -152,6 +154,8 @@ export interface TextApi {
   lines(): Promise<HistoryLine[]>;
   /** Called with all the lines again whenever one is added or the room is left. Returns a function that stops it. */
   onLines(cb: (lines: HistoryLine[]) => void): () => void;
+  /** The other members' names, for Tab after /mute. */
+  names(): Promise<string[]>;
   /** The pointer came onto the window or left it: the window doesn't hide by itself while the pointer is over it. */
   hover(on: boolean): void;
 }
