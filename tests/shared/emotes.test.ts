@@ -151,6 +151,10 @@ describe('emoteName', () => {
     expect(emoteName('facepalm', 'zh-CN', [])).toBe('捂脸');
   });
 
+  it('uses the Chinese name for Traditional Chinese too, the only one the catalog has', () => {
+    expect(emoteName('facepalm', 'zh-TW', [])).toBe('捂脸');
+  });
+
   it('names a custom emote by its stored name', () => {
     expect(emoteName(`c:${HASH}`, 'en', [custom(HASH, 'My Cat')])).toBe('My Cat');
     expect(emoteName(`c:${HASH}`, 'zh-CN', [custom(HASH, 'My Cat')])).toBe('My Cat');

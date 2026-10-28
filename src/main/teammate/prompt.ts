@@ -216,7 +216,7 @@ export function systemPrompt(ctx: AskContext): string {
     vocab,
   ];
   if (ctx.emotes) {
-    const zh = ctx.lang === 'zh-CN';
+    const zh = ctx.lang !== 'en'; // the catalog's Chinese names, for either script
     const names = EMOTE_CATALOG.map((e) => `${e.slug} (${e.name}${zh ? `, ${e.nameZh}` : ''})`);
     lines.push(
       '',

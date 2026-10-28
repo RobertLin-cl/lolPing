@@ -91,7 +91,7 @@ The wheel, from the top going clockwise: Danger, Push, On My Way, All In, Assist
 - **Room:** your name and tag colour, how friends' text appears (in the chat window, at the spot they pointed at, or scrolling across the top as 弹幕), how long the chat window stays up, the **text shortcut** (Ctrl + Enter by default) and the **room panel key** (Tab by default). The panel key always reaches other apps; the text shortcut does too, except while you are in a room.
 - **Features:** turns on the AI teammate (off by default, see [AI teammate](#ai-teammate)), and turns off the parts you don't use: emotes, and rooms with room text, votes and the room panel under it. A feature that is off has no keys, no settings section, sends nothing and ignores what friends send for it.
 - **Launch at Windows startup** (**Open at login** on a Mac): starts hidden in the tray or menu bar.
-- **Language:** follows the system display language, or pick English or 简体中文.
+- **Language:** follows the system display language, or pick English, 简体中文 or 繁體中文. Taiwan, Hong Kong and Macao get 繁體中文. Bundled emotes keep their Simplified Chinese names in 繁體中文, the only Chinese names League's data gives them here.
 
 Settings are saved in `%APPDATA%\lolPing\settings.json` on Windows and `~/Library/Application Support/lolPing/settings.json` on a Mac.
 

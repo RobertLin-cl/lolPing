@@ -1,6 +1,6 @@
 import type { Lang } from '../i18n';
 
-const LIMIT: Record<Lang, number> = { en: 90, 'zh-CN': 45 };
+const LIMIT: Record<Lang, number> = { en: 90, 'zh-CN': 45, 'zh-TW': 45 };
 const SENTENCE_END = /[.!?。！？]/;
 
 /** Cuts a reply into the one line the bubble shows and the rest the card keeps. */

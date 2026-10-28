@@ -17,8 +17,8 @@ describe('Linux platform', () => {
     expect(normalizeSettings({trigger:{vk:0x14}}, 'linux').trigger).toBe('alt');
     expect(normalizeSettings({trigger:'capslock'}, 'linux').trigger).toBe('alt');
   });
-  it('explains X11 requirements in both languages instead of asking for macOS permissions', () => {
-    for (const lang of ['en','zh-CN'] as const) {
+  it('explains X11 requirements in every language instead of asking for macOS permissions', () => {
+    for (const lang of ['en','zh-CN','zh-TW'] as const) {
       const t = strings(lang, 'linux');
       expect(t.statusNoAccessHint).toContain('X11');
       expect(t.statusNoAccessHint).toContain('Wayland');
