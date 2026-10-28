@@ -17,8 +17,14 @@ describe('parseTextInput', () => {
 
   it('calls any other slash word unknown', () => {
     expect(parseTextInput('/remake')).toEqual({ kind: 'unknown' });
-    expect(parseTextInput('/')).toEqual({ kind: 'unknown' });
+    expect(parseTextInput('/Remake now')).toEqual({ kind: 'unknown' });
     expect(parseTextInput('/ff now')).toEqual({ kind: 'unknown' });
+  });
+
+  it('sends a slash that starts no command word as text: alone, doubled, before a space or anything but a letter', () => {
+    for (const line of ['/', ' / ', '//', '/ ok', '/?', '/123', '/哈哈']) {
+      expect(parseTextInput(line), line).toEqual({ kind: 'text', text: line.trim() });
+    }
   });
 
   it('calls blank or invisible input empty', () => {

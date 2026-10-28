@@ -114,13 +114,13 @@ export function whisperTarget(members: readonly RoomMember[], rest: string): { t
 }
 
 /**
- * Commands start with a slash and match as a whole word; /surrender is the long form of /ff, /mute takes a name, /w a
- * name and a message, and /r a message.
+ * Commands are a slash and a word and match as a whole word; /surrender is the long form of /ff, /mute takes a name, /w
+ * a name and a message, and /r a message. A slash with no letter after it (a lone "/", "//", "/ ok") is plain text.
  */
 export function parseTextInput(raw: string): TextInput {
   const text = sanitizeText(raw);
   if (text === '') return { kind: 'empty' };
-  if (!text.startsWith('/')) return { kind: 'text', text };
+  if (!/^\/[a-z]/i.test(text)) return { kind: 'text', text };
   const mute = /^\/mute(?:\s+(.*))?$/i.exec(text);
   if (mute) return { kind: 'mute', name: (mute[1] ?? '').trim() };
   const whisper = /^\/w(?:\s+(.*))?$/i.exec(text);
