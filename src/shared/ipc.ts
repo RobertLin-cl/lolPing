@@ -118,8 +118,8 @@ export function parseMateGlow(raw: unknown): MateGlow | null {
 
 /** The room chat window: the log of this session's room lines and the box to type into. */
 export const TEXT_CH = {
-  submit: 'text:submit', cancel: 'text:cancel', hide: 'text:hide', strings: 'text:strings', lines: 'text:lines',
-  linesChanged: 'text:linesChanged', hover: 'text:hover',
+  submit: 'text:submit', hide: 'text:hide', strings: 'text:strings', lines: 'text:lines', linesChanged: 'text:linesChanged',
+  hover: 'text:hover',
 } as const;
 
 /** The chat window's words, in the language the app uses. */
@@ -131,6 +131,8 @@ export interface TextBoxText {
   placeholder: string;
   /** The commands the box understands, shown under the input. */
   hint: string;
+  /** Shown instead of the hint while the window has the keyboard but the box doesn't: what Enter and Esc do now. */
+  away: string;
   /** Shown instead of the hint when the text was a command that doesn't exist. */
   unknown: string;
   /** Shown instead of the hint for a vote command while votes are switched off. */
@@ -143,9 +145,7 @@ export type TextAnswer = 'sent' | 'unknown' | 'votesOff';
 export interface TextApi {
   /** Resolves with the app's answer. The box keeps the keyboard either way, so several lines can be typed in a row. */
   submit(text: string): Promise<TextAnswer>;
-  /** Esc or an empty Enter: the keyboard goes back to the app underneath, and the window stays up until it hides by itself. */
-  cancel(): void;
-  /** The title bar's hide button: the window goes away now. */
+  /** The second Esc, or the title bar's hide button: the window goes away now, and the keyboard back where it was. */
   hide(): void;
   strings(): Promise<TextBoxText | null>;
   /** This session's room lines, oldest first. */

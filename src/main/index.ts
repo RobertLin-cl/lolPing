@@ -699,7 +699,7 @@ function start(): void {
     strings: () => {
       const t = text();
       return {
-        title: t.chatTitle, hide: t.chatHideButton, placeholder: t.textBoxPlaceholder, hint: t.textBoxHint,
+        title: t.chatTitle, hide: t.chatHideButton, placeholder: t.textBoxPlaceholder, hint: t.textBoxHint, away: t.chatAway,
         unknown: t.textBoxUnknown, votesOff: t.textBoxVotesOff,
       };
     },

@@ -4,7 +4,6 @@ import type { TextApi } from '../shared/ipc';
 const api: TextApi = {
   // Inlined: a sandboxed preload can require electron, but not a generated sibling chunk.
   submit: (text) => ipcRenderer.invoke('text:submit', text),
-  cancel: () => ipcRenderer.send('text:cancel'),
   hide: () => ipcRenderer.send('text:hide'),
   strings: () => ipcRenderer.invoke('text:strings'),
   lines: () => ipcRenderer.invoke('text:lines'),

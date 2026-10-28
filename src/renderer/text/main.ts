@@ -76,37 +76,52 @@ input.addEventListener('input', (event) => {
 });
 input.addEventListener('compositionend', clamp);
 /**
- * The key whose release gives the keyboard back: Esc, or Enter on an empty box. Leaving on the press would drop the
- * key's release into the app underneath, and some (a terminal app such as a coding agent) read that as the key itself.
+ * Two steps out, as in League: Esc or an empty Enter only leaves the box, so the window keeps the keyboard and Enter
+ * goes back in; Esc again closes the window, on the key's release, so the release doesn't drop into the app that gets
+ * the keyboard back.
  */
-let leaveOnKeyUp: 'Escape' | 'Enter' | null = null;
+let closeOnKeyUp = false;
 
 input.addEventListener('keydown', (event) => {
   if (event.isComposing) return;
   if (event.key === 'Enter') {
     event.preventDefault();
-    // Enter on an empty box gives the keyboard back, as in League.
-    if (input.value.trim() === '') leaveOnKeyUp = 'Enter';
+    if (input.value.trim() === '') input.blur();
     else void send();
+  } else if (event.key === 'Escape') {
+    event.preventDefault();
+    input.blur();
   } else if (event.key === 'Tab') {
     event.preventDefault(); // focus leaving the box would leave Enter and Esc with nothing to hear them
   }
 });
-// Esc works wherever the keyboard is in the window, not only in the box (after a click on the log, say).
+// Out of the box, wherever the keyboard is in the window (after a click on the log, say): Enter goes back in, Esc closes.
 document.addEventListener('keydown', (event) => {
-  if (event.isComposing || event.key !== 'Escape') return;
-  event.preventDefault();
-  leaveOnKeyUp = 'Escape';
+  if (event.isComposing || event.target === input) return;
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    input.focus();
+  } else if (event.key === 'Escape') {
+    event.preventDefault();
+    closeOnKeyUp = true;
+  }
 });
 document.addEventListener('keyup', (event) => {
-  if (leaveOnKeyUp === null || event.key !== leaveOnKeyUp) return;
+  if (!closeOnKeyUp || event.key !== 'Escape') return;
   event.preventDefault();
-  leaveOnKeyUp = null;
-  window.textApi.cancel();
+  closeOnKeyUp = false;
+  window.textApi.hide();
 });
 // A press whose release came after the keyboard had already gone elsewhere (a click outside) leaves nothing pending.
 window.addEventListener('blur', () => {
-  leaveOnKeyUp = null;
+  closeOnKeyUp = false;
+});
+// The hint says what the keys do in each step.
+input.addEventListener('focus', () => {
+  if (words) showHint(words.hint, false);
+});
+input.addEventListener('blur', () => {
+  if (words && document.hasFocus()) showHint(words.away, false);
 });
 hideButton.addEventListener('click', () => window.textApi.hide());
 // Whenever the window gets the keyboard (the shortcut, or a click anywhere on it), the box has it.

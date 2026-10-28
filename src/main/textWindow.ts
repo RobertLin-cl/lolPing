@@ -51,9 +51,6 @@ export function registerTextWindow(d: ChatWindowDeps): void {
     if (!own(event.sender) || typeof raw !== 'string' || !deps) return 'unknown';
     return deps.submit(raw, at);
   });
-  ipcMain.on(TEXT_CH.cancel, (event) => {
-    if (own(event.sender)) giveKeyboardBack();
-  });
   ipcMain.on(TEXT_CH.hide, (event) => {
     if (own(event.sender)) hideChat();
   });
@@ -88,7 +85,10 @@ export function typeInChat(point: Point): void {
   reveal(w, true);
 }
 
-/** The hide button, or the countdown ran out: the window goes away, and the keyboard back to the app it came from if it had it. */
+/**
+ * The second Esc, the hide button, or the countdown ran out: the window goes away, and the keyboard back to the app it
+ * came from if it had it.
+ */
 export function hideChat(): void {
   autoHide.stop();
   pending = null;
@@ -117,19 +117,6 @@ function reveal(w: BrowserWindow, focus: boolean): void {
   } else if (!w.isVisible()) {
     w.showInactive();
   }
-  autoHide.restart();
-}
-
-/**
- * Esc or an empty Enter: the app underneath gets the keyboard back and the window stays up, hiding by itself later.
- * (Clicking outside does the same through the OS.) Sending a line keeps the keyboard, so several can be typed in a row.
- */
-function giveKeyboardBack(): void {
-  const w = textWindow();
-  if (!w?.isVisible()) return;
-  // Hiding hands the keyboard to the window that had it before; showing again without activating keeps it there.
-  w.hide();
-  w.showInactive();
   autoHide.restart();
 }
 
