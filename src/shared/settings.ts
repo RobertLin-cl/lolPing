@@ -115,7 +115,8 @@ export const DEFAULT_SETTINGS: Settings = {
   wheelSizePx: WHEEL.size,
   wheel: [...DEFAULT_WHEEL],
   toggleHotkey: { mods: MOD.ctrl | MOD.alt, vk: 0x50 },
-  textHotkey: { mods: MOD.alt, vk: 0x54 },
+  // Not Alt+T (too easy to hit) and not a bare Enter or Shift+Enter, which open League's own chat.
+  textHotkey: { mods: MOD.ctrl, vk: 0x0d },
   panelKey: 0x09,
   panelHoldS: 0.5,
   pingSizePx: 110,
@@ -295,7 +296,7 @@ function panelKey(raw: unknown, taken: readonly (number | null)[]): number {
   return PANEL_KEY_FALLBACKS.find((k) => !taken.includes(k)) ?? DEFAULT_SETTINGS.panelKey;
 }
 
-const TEXT_HOTKEY_FALLBACK: Hotkey = { mods: MOD.alt, vk: 0x59 }; // Alt+Y when Alt+T is taken
+const TEXT_HOTKEY_FALLBACK: Hotkey = { mods: MOD.ctrl | MOD.shift, vk: 0x0d }; // Ctrl+Shift+Enter when Ctrl+Enter is taken
 
 function roomCode(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;

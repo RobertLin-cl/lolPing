@@ -64,9 +64,9 @@ describe('normalizeSettings', () => {
     expect(normalizeSettings({ textHotkey: null }).textHotkey).toEqual(DEFAULT_SETTINGS.textHotkey);
   });
 
-  it('defaults the text shortcut to Alt+T', () => {
-    expect(DEFAULT_SETTINGS.textHotkey).toEqual({ mods: MOD.alt, vk: 0x54 });
-    expect(normalizeSettings({}).textHotkey).toEqual({ mods: MOD.alt, vk: 0x54 });
+  it('defaults the text shortcut to Ctrl+Enter', () => {
+    expect(DEFAULT_SETTINGS.textHotkey).toEqual({ mods: MOD.ctrl, vk: 0x0d });
+    expect(normalizeSettings({}).textHotkey).toEqual({ mods: MOD.ctrl, vk: 0x0d });
   });
 
   it('defaults the panel key to Tab', () => {
@@ -108,9 +108,9 @@ describe('normalizeSettings', () => {
   });
 
   it('moves the text shortcut off the pause shortcut', () => {
-    expect(normalizeSettings({ toggleHotkey: { mods: MOD.alt, vk: 0x54 } })).toMatchObject({
-      toggleHotkey: { mods: MOD.alt, vk: 0x54 },
-      textHotkey: { mods: MOD.alt, vk: 0x59 },
+    expect(normalizeSettings({ toggleHotkey: { mods: MOD.ctrl, vk: 0x0d } })).toMatchObject({
+      toggleHotkey: { mods: MOD.ctrl, vk: 0x0d },
+      textHotkey: { mods: MOD.ctrl | MOD.shift, vk: 0x0d },
     });
     expect(normalizeSettings({
       toggleHotkey: { mods: MOD.ctrl | MOD.alt, vk: 0x58 },

@@ -66,16 +66,16 @@ describe('commands', () => {
       type: 'config', trigger: 'alt', triggerVk: 0, clickPing: false, gameCheck: true,
       emoteTrigger: 'ctrl', emoteTriggerVk: 0, emoteClick: false, askTrigger: 'off', askTriggerVk: 0, askClick: false,
       askDoubleTap: false, dragThresholdPx: 8,
-      toggleMods: 3, toggleVk: 0x50, textMods: 2, textVk: 0, panelVk: 0, enabled: true,
+      toggleMods: 3, toggleVk: 0x50, textMods: 1, textVk: 0, panelVk: 0, enabled: true,
     });
   });
 
   it('sends textVk 0 outside a room', () => {
-    expect(configCommand(DEFAULT_SETTINGS, true, { text: false, panel: false })).toMatchObject({ textMods: 2, textVk: 0 });
+    expect(configCommand(DEFAULT_SETTINGS, true, { text: false, panel: false })).toMatchObject({ textMods: 1, textVk: 0 });
   });
 
   it('sends the text shortcut while the text key is live', () => {
-    expect(configCommand(DEFAULT_SETTINGS, true, { text: true, panel: false })).toMatchObject({ textMods: 2, textVk: 0x54 });
+    expect(configCommand(DEFAULT_SETTINGS, true, { text: true, panel: false })).toMatchObject({ textMods: 1, textVk: 0x0d });
   });
 
   it('sends panelVk 0 outside a room and the panel key inside one', () => {

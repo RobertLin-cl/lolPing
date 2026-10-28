@@ -442,7 +442,7 @@ function start(): void {
     },
     hide: () => panels.hideRoster(),
   });
-  // The room keys (Alt+T and the panel key) are the helper's only while a room is active, so they reach other apps otherwise.
+  // The room keys (the text shortcut and the panel key) are the helper's only while a room is active.
   let live = liveKeys(settings, { active: false }, enabled);
   const sendConfig = (): void => {
     live = liveKeys(settings, { active: room.state().phase === 'active' }, enabled);
