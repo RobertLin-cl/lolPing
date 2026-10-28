@@ -3,7 +3,7 @@ import { DEFAULT_CLICK_EMOTE, DEFAULT_EMOTE_WHEEL } from '../../src/shared/emote
 import { MOD } from '../../src/shared/keys';
 import { formatRoomCode, makeRoomCode } from '../../src/shared/roomCode';
 import {
-  askKeyClashes, askKeyHeld, asksOnPing, DEFAULT_SETTINGS, keyboardTriggers, mergeSettings, normalizeSettings,
+  askKeyClashes, askKeyHeld, asksOnPing, DEFAULT_SETTINGS, emoteSizeFor, keyboardTriggers, mergeSettings, normalizeSettings,
   overlaySettings, patchClashes, rendererPatch, sameTrigger, separateAskKey, soundLevel, triggerLabel, triggersClash,
   type TriggerKey,
 } from '../../src/shared/settings';
@@ -253,7 +253,7 @@ describe('emote settings', () => {
   it('emote defaults', () => {
     const s = normalizeSettings(undefined);
     expect(s).toMatchObject({
-      emoteTrigger: 'ctrl', emoteClick: false, emoteSizePx: 150, emoteSound: true, customEmotes: [],
+      emoteTrigger: 'ctrl', emoteClick: false, emoteSizePx: 150, customEmoteSizePx: 300, emoteSound: true, customEmotes: [],
       emoteWheel: [...DEFAULT_EMOTE_WHEEL], clickEmoteId: DEFAULT_CLICK_EMOTE,
     });
     expect(DEFAULT_SETTINGS.trigger).not.toBe(DEFAULT_SETTINGS.emoteTrigger);
@@ -368,6 +368,15 @@ describe('emote settings', () => {
     expect(normalizeSettings({ emoteSizePx: 999 }).emoteSizePx).toBe(300);
     expect(normalizeSettings({ emoteSizePx: 201.4 }).emoteSizePx).toBe(201);
     expect(normalizeSettings({ emoteSizePx: 'big' }).emoteSizePx).toBe(150);
+  });
+
+  it('customEmoteSizePx is 300 for a file from before it, clamps to 80–512, and leaves emoteSizePx alone', () => {
+    expect(normalizeSettings({ emoteSizePx: 130 })).toMatchObject({ emoteSizePx: 130, customEmoteSizePx: 300 });
+    expect(normalizeSettings({ customEmoteSizePx: 10 }).customEmoteSizePx).toBe(80);
+    expect(normalizeSettings({ customEmoteSizePx: 999 }).customEmoteSizePx).toBe(512);
+    expect(normalizeSettings({ customEmoteSizePx: 420.6 }).customEmoteSizePx).toBe(421);
+    expect(normalizeSettings({ customEmoteSizePx: 'big' }).customEmoteSizePx).toBe(300);
+    expect(normalizeSettings({ customEmoteSizePx: 400 }).emoteSizePx).toBe(150);
   });
 
   it('keeps the emote booleans', () => {
@@ -591,7 +600,8 @@ describe('helpers', () => {
     expect(overlaySettings(DEFAULT_SETTINGS)).toEqual({
       pingSizePx: 110, pingDurationS: 3.2, keepLastPing: false, volume: 70, muted: false, tickSound: true,
       wheelSizePx: 600, wheel: ['danger', 'push', 'omw', 'allin', 'assist', 'needvision', 'missing', 'enemyvision'], clickPingId: 'generic',
-      emoteWheel: [...DEFAULT_EMOTE_WHEEL], clickEmoteId: DEFAULT_CLICK_EMOTE, emoteSizePx: 150, emoteSound: true, customEmotes: [],
+      emoteWheel: [...DEFAULT_EMOTE_WHEEL], clickEmoteId: DEFAULT_CLICK_EMOTE, emoteSizePx: 150, customEmoteSizePx: 300, emoteSound: true,
+      customEmotes: [],
       lang: 'en',
       ask: {
         tag: { name: 'AI', color: 3, rgb: null },
@@ -628,12 +638,22 @@ describe('helpers', () => {
 
   it('overlaySettings carries the emote fields', () => {
     const custom = [{ id: `c:${'a'.repeat(32)}`, name: 'Mine', animated: true }];
-    const s = normalizeSettings({ customEmotes: custom, clickEmoteId: custom[0].id, emoteSizePx: 200, emoteSound: false });
+    const s = normalizeSettings({ customEmotes: custom, clickEmoteId: custom[0].id, emoteSizePx: 200, customEmoteSizePx: 360, emoteSound: false });
     const o = overlaySettings(s);
-    expect(o).toMatchObject({ clickEmoteId: custom[0].id, emoteSizePx: 200, emoteSound: false, customEmotes: custom });
+    expect(o).toMatchObject({ clickEmoteId: custom[0].id, emoteSizePx: 200, customEmoteSizePx: 360, emoteSound: false, customEmotes: custom });
     expect(o.emoteWheel).toEqual(s.emoteWheel);
     expect(o.emoteWheel).not.toBe(s.emoteWheel);
     expect(o.customEmotes).not.toBe(s.customEmotes);
+  });
+});
+
+describe('emoteSizeFor', () => {
+  const sizes = { emoteSizePx: 150, customEmoteSizePx: 300 };
+
+  it('draws League’s emotes at the emote size, and imported ones and their "?" at the custom emote size', () => {
+    expect(emoteSizeFor({ kind: 'bundled', slug: 'facepalm' }, sizes)).toBe(150);
+    expect(emoteSizeFor({ kind: 'custom', url: 'lolping://emotes/x.hd', animated: false, fx: 0 }, sizes)).toBe(300);
+    expect(emoteSizeFor({ kind: 'placeholder' }, sizes)).toBe(300);
   });
 });
 

@@ -2,7 +2,7 @@ import { normalizeChatBounds, type ChatBounds } from './chatBounds';
 import { DEFAULT_CLICK_EMOTE, DEFAULT_EMOTE_WHEEL } from './emoteCatalog';
 import {
   CUSTOM_NAME_MAX, MAX_CUSTOM_EMOTES, customHash, isCustomRef, isEmoteFx, normalizeClickEmote, normalizeEmoteWheel,
-  type CustomEmote, type EmoteRef,
+  type CustomEmote, type EmoteArt, type EmoteRef,
 } from './emotes';
 import { DEFAULT_FEATURES, featureOn, normalizeFeatures, type Features } from './features';
 import { WHEEL } from './geometry';
@@ -83,7 +83,10 @@ export interface Settings {
   /** The emote wheel's slots, top (N) then clockwise: 8 distinct bundled slugs or imported emotes. */
   emoteWheel: EmoteRef[];
   clickEmoteId: EmoteRef;
+  /** How wide League's emotes appear. */
   emoteSizePx: number;
+  /** How wide imported emotes appear, ours and room members' alike, and the "?" that stands in for a missing one. */
+  customEmoteSizePx: number;
   emoteSound: boolean;
   /** Imported emotes, at most MAX_CUSTOM_EMOTES. Their files live in the data folder. */
   customEmotes: CustomEmote[];
@@ -150,6 +153,7 @@ export const DEFAULT_SETTINGS: Settings = {
   emoteWheel: [...DEFAULT_EMOTE_WHEEL],
   clickEmoteId: DEFAULT_CLICK_EMOTE,
   emoteSizePx: 150,
+  customEmoteSizePx: 300,
   emoteSound: true,
   customEmotes: [],
   friendEmotes: true,
@@ -172,6 +176,8 @@ export const LIMITS = {
   volume: { min: 0, max: 100, step: 1 },
   incomingPingLimit: { min: 0, max: 20, step: 1 },
   emoteSizePx: { min: 80, max: 300, step: 1 },
+  // Up to the HD still's 512 px, which stays sharp at that width on a 1x display.
+  customEmoteSizePx: { min: 80, max: 512, step: 1 },
 } as const;
 
 type NumKey = keyof typeof LIMITS;
@@ -387,6 +393,7 @@ export function normalizeSettings(raw: unknown, platform: Platform = 'win', iden
     emoteWheel: normalizeEmoteWheel(r.emoteWheel, custom),
     clickEmoteId: normalizeClickEmote(r.clickEmoteId, custom),
     emoteSizePx: num(r.emoteSizePx, 'emoteSizePx'),
+    customEmoteSizePx: num(r.customEmoteSizePx, 'customEmoteSizePx'),
     emoteSound: bool(r.emoteSound, 'emoteSound'),
     customEmotes: custom,
     friendEmotes: bool(r.friendEmotes, 'friendEmotes'),
@@ -432,7 +439,7 @@ export function triggerLabel(t: TriggerKey, lang: Lang = 'en', platform: Platfor
 export type OverlaySettings = Pick<
   Settings,
   'pingSizePx' | 'pingDurationS' | 'keepLastPing' | 'volume' | 'muted' | 'tickSound' | 'wheelSizePx' | 'wheel' | 'clickPingId'
-  | 'emoteWheel' | 'clickEmoteId' | 'emoteSizePx' | 'emoteSound' | 'customEmotes'
+  | 'emoteWheel' | 'clickEmoteId' | 'emoteSizePx' | 'customEmoteSizePx' | 'emoteSound' | 'customEmotes'
 > & {
   /** The app's language: the page takes it as its own, so Chinese text gets that script's fonts. */
   lang: Lang;
@@ -452,11 +459,15 @@ export const soundLevel = (s: Pick<Settings, 'volume' | 'muted'>): number => (s.
 export const overlaySettings = (s: Settings, lang: Lang = 'en'): OverlaySettings => ({
   pingSizePx: s.pingSizePx, pingDurationS: s.pingDurationS, keepLastPing: s.keepLastPing, volume: s.volume, muted: s.muted, tickSound: s.tickSound,
   wheelSizePx: s.wheelSizePx, wheel: [...s.wheel], clickPingId: s.clickPingId,
-  emoteWheel: [...s.emoteWheel], clickEmoteId: s.clickEmoteId, emoteSizePx: s.emoteSizePx, emoteSound: s.emoteSound,
-  customEmotes: s.customEmotes.map((c) => ({ ...c })),
+  emoteWheel: [...s.emoteWheel], clickEmoteId: s.clickEmoteId, emoteSizePx: s.emoteSizePx, customEmoteSizePx: s.customEmoteSizePx,
+  emoteSound: s.emoteSound, customEmotes: s.customEmotes.map((c) => ({ ...c })),
   lang,
   ask: askWheel(s, lang),
 });
+
+/** How wide an emote appears: League's at the emote size, an imported one (or the "?" in its place) at its own. */
+export const emoteSizeFor = (art: EmoteArt, s: Pick<OverlaySettings, 'emoteSizePx' | 'customEmoteSizePx'>): number =>
+  (art.kind === 'bundled' ? s.emoteSizePx : s.customEmoteSizePx);
 
 function askWheel(s: Settings, lang: Lang): OverlaySettings['ask'] {
   const t = s.teammate;

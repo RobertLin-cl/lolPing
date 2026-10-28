@@ -208,6 +208,8 @@ export function EmoteSection({ settings: s, update, lengthUnit }: { settings: Se
         checked={s.emoteClick} onChange={(v) => void update({ emoteClick: v })} dim={keyOff} />
       <SliderRow limit="emoteSizePx" icon={<ResizeLarge24Regular />} title={t.emoteSize} value={s.emoteSizePx}
         format={(v) => `${v} ${lengthUnit}`} onChange={(v) => void update({ emoteSizePx: v })} dim={keyOff} />
+      <SliderRow limit="customEmoteSizePx" icon={<ResizeLarge24Regular />} title={t.customEmoteSize} description={t.customEmoteSizeDesc}
+        value={s.customEmoteSizePx} format={(v) => `${v} ${lengthUnit}`} onChange={(v) => void update({ customEmoteSizePx: v })} dim={keyOff} />
       <SwitchRow icon={<Speaker224Regular />} title={t.emoteSound} description={t.emoteSoundDesc}
         checked={s.emoteSound} onChange={(v) => void update({ emoteSound: v })} dim={keyOff} />
       <WheelEditor wheel={s.emoteWheel} center={s.clickEmoteId} centerOn={s.emoteClick && !keyOff} trigger={key}

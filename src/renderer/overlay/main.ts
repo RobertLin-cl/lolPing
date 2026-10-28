@@ -10,7 +10,7 @@ import {
 import { parseMateGlow, type MateMark, type PingTag } from '../../shared/ipc';
 import type { WheelKind } from '../../shared/protocol';
 import { tagColorCss } from '../../shared/roomColors';
-import { DEFAULT_SETTINGS, overlaySettings, soundLevel, type OverlaySettings } from '../../shared/settings';
+import { DEFAULT_SETTINGS, emoteSizeFor, overlaySettings, soundLevel, type OverlaySettings } from '../../shared/settings';
 import '../shared/emoteFx.css';
 import { EmoteStage } from './emoteStage';
 import { GlowStage } from './glowFx';
@@ -129,7 +129,7 @@ function dressWheel(ask: boolean): void {
 }
 
 function emote(owner: string, art: EmoteArt, x: number, y: number, tag?: PingTag, keep = false): void {
-  stage.spawn(owner, art, x, y, { sizePx: settings.emoteSizePx, tag, keep });
+  stage.spawn(owner, art, x, y, { sizePx: emoteSizeFor(art, settings), tag, keep });
   if (!settings.emoteSound) return;
   if (art.kind === 'bundled' && catalogEmote(art.slug)?.hasSound) sounds.play(`emote:${art.slug}`, volume());
   if (art.kind === 'custom' && art.sound) void sounds.playUrl(art.sound, volume());
