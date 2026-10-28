@@ -20,6 +20,11 @@ export interface ChatWindowDeps {
   hideAfterMs(): number;
   /** The window took the keyboard or gave it back: while it has it, the helper passes all input through. */
   typing(on: boolean): void;
+  /**
+   * Windows: asks the helper to bring the window to the front, since Windows keeps the keyboard with the app that was
+   * just typed in and only half-honours our own focus() then. Elsewhere it does nothing.
+   */
+  activate(handle: Buffer): void;
 }
 
 let deps: ChatWindowDeps | null = null;
@@ -107,6 +112,7 @@ function reveal(w: BrowserWindow, focus: boolean): void {
   if (focus) {
     w.show();
     w.focus();
+    deps?.activate(w.getNativeWindowHandle());
     w.webContents.focus(); // the page itself, so its box gets the keys and not just the frame
   } else if (!w.isVisible()) {
     w.showInactive();

@@ -22,6 +22,8 @@ constexpr UINT kWmInject = WM_APP + 2;
 Decision* g_decision = nullptr;
 Output* g_out = nullptr;
 DWORD g_hookThreadId = 0;
+/** lolPing's process: the only one whose windows `activate` brings forward. 0 when it couldn't be found. */
+DWORD g_parentPid = 0;
 // Injects waiting to run on the hook thread's message loop. Hook callbacks and that loop share one
 // thread, so no lock is needed; only that thread touches this.
 std::vector<Inject> g_pendingInjects;
@@ -222,6 +224,33 @@ void quitWhenOrphaned(DWORD hookThreadId) {
   TerminateProcess(GetCurrentProcess(), 0);
 }
 
+/**
+ * Brings one of lolPing's windows to the front with the keyboard. Windows refuses lolPing's own request while another
+ * app has just had input (the foreground lock): the window comes up, but keys keep going to that app. Joining the
+ * foreground thread's input alone was refused too on Windows 11; with an input of our own just before, the switch is
+ * allowed. It runs on a thread of its own, so an app that doesn't answer can never stall the hooks.
+ */
+void activateWindow(uint64_t handle) {
+  const HWND target = reinterpret_cast<HWND>(static_cast<uintptr_t>(handle));
+  DWORD owner = 0;
+  if (g_parentPid == 0 || !IsWindow(target) || GetWindowThreadProcessId(target, &owner) == 0 || owner != g_parentPid) return;
+  std::thread([target] {
+    const HWND front = GetForegroundWindow();
+    if (front == target) return;
+    const DWORD frontThread = front != nullptr ? GetWindowThreadProcessId(front, nullptr) : 0;
+    const DWORD self = GetCurrentThreadId();
+    const bool joined = frontThread != 0 && AttachThreadInput(self, frontThread, TRUE) != 0;
+    // Windows lets the process with the last input change the foreground. An empty mouse event moves and presses
+    // nothing, and it carries our marker so our own hook passes it as ours.
+    INPUT nudge{};
+    nudge.type = INPUT_MOUSE;
+    nudge.mi.dwExtraInfo = kSelfMarker;
+    SendInput(1, &nudge, sizeof(nudge));
+    SetForegroundWindow(target);
+    if (joined) AttachThreadInput(self, frontThread, FALSE);
+  }).detach();
+}
+
 }  // namespace
 
 int runHooks(Output& out) {
@@ -254,6 +283,7 @@ int runHooks(Output& out) {
   reader.detach();
   // stdin alone can miss Electron's death: another process may hold the pipe open.
   if (const HANDLE parent = openParent()) {
+    g_parentPid = GetProcessId(parent);
     std::thread([threadId, parent] {
       WaitForSingleObject(parent, INFINITE);
       quitWhenOrphaned(threadId);
@@ -276,6 +306,7 @@ int runHooks(Output& out) {
         case Command::Kind::Suspend: apply(decision.setSuspended(c.flag)); break;
         case Command::Kind::StaleWatch: apply(decision.setStaleWatch(c.flag)); break;
         case Command::Kind::Shutdown: PostQuitMessage(0); break;
+        case Command::Kind::Activate: activateWindow(c.window); break;
         default: out.error("invalid command: " + *text); break;
       }
     }

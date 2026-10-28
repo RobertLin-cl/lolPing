@@ -7,9 +7,9 @@ export type WheelKind = 'ping' | 'emote' | 'ask';
 
 /**
  * The helper's `ready` version this build expects. 5: the ask key, `"wheel":"ask"` and `triggerUp`.
- * 6 adds `askWords`, `scroll`, the `askDoubleTap` config field and the `staleWatch` command.
+ * 6 adds `askWords`, `scroll`, the `askDoubleTap` config field and the `staleWatch` command. 7 adds `activate`.
  */
-export const HELPER_VERSION = 6;
+export const HELPER_VERSION = 7;
 
 /**
  * Messages the hook helper writes to stdout, one JSON object per line.
@@ -116,6 +116,8 @@ export type HelperCommand =
   | { type: 'suspend'; on: boolean }
   /** Report scrolls. Its own command, not a config field: a config cancels a gesture the user may be in. */
   | { type: 'staleWatch'; on: boolean }
+  /** Windows: bring this window of ours to the front with the keyboard, past the foreground lock. Decimal handle text. */
+  | { type: 'activate'; window: string }
   | { type: 'shutdown' };
 
 /**
@@ -159,3 +161,10 @@ export function configCommand(
 }
 
 export const serializeCommand = (c: HelperCommand): string => `${JSON.stringify(c)}\n`;
+
+/** The `activate` command for a window, from Electron's native handle (an HWND: 8 bytes on 64-bit Windows, else 4). */
+export function activateCommand(handle: Uint8Array): HelperCommand {
+  const view = new DataView(handle.buffer, handle.byteOffset, handle.byteLength);
+  const window = handle.byteLength >= 8 ? view.getBigUint64(0, true).toString() : view.getUint32(0, true).toString();
+  return { type: 'activate', window };
+}

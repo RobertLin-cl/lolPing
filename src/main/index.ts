@@ -15,7 +15,7 @@ import { announcedEmoteHashes } from '../shared/emotes';
 import { featureOn, liveKeys, roomFeaturesOff } from '../shared/features';
 import { hotkeyLabel } from '../shared/keys';
 import { LOGO_TEXTURE } from '../shared/pings';
-import { configCommand, type HelperStatus } from '../shared/protocol';
+import { activateCommand, configCommand, type HelperStatus } from '../shared/protocol';
 import type { RoomState } from '../shared/room';
 import type { VoteKind } from '../shared/roomProtocol';
 import { formatRoomCode, parseRoomCode } from '../shared/roomCode';
@@ -711,6 +711,9 @@ function start(): void {
     typing: (on) => {
       textOpen = on;
       syncSuspended();
+    },
+    activate: (handle) => {
+      if (PLATFORM === 'win') bridge.send(activateCommand(handle));
     },
   });
   const openText = (): void => {

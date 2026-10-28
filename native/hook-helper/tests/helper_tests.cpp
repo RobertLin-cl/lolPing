@@ -1388,6 +1388,18 @@ static void test_parse_config_panel_key() {
   CHECK(keep.config.panelVk == 9);
 }
 
+static void test_parse_activate_takes_a_decimal_window_handle() {
+  Command c = parseCommand(R"({"type":"activate","window":"1311492"})", Config{});
+  CHECK(c.kind == Command::Kind::Activate && c.window == 1311492);
+  c = parseCommand(R"({"type":"activate","window":"9223372036854775807"})", Config{});
+  CHECK(c.kind == Command::Kind::Activate && c.window == 9223372036854775807ULL);
+  // Missing, empty, signed, not a number, or too long to be sure it fits 64 bits: nothing is activated.
+  for (const char* bad : {R"({"type":"activate"})", R"({"type":"activate","window":""})", R"({"type":"activate","window":"-5"})",
+                          R"({"type":"activate","window":"12a"})", R"({"type":"activate","window":"12345678901234567890"})"}) {
+    CHECK(parseCommand(bad, Config{}).kind == Command::Kind::Invalid);
+  }
+}
+
 static void test_json_parses_flat_objects() {
   std::map<std::string, std::string> m;
   CHECK(parseFlatJson(R"({"type":"config","enabled":true,"dragThresholdPx":8,"trigger":"alt"})", m));
@@ -1948,6 +1960,7 @@ int main() {
   test_parse_config_emote_fields();
   test_parse_config_text_hotkey();
   test_parse_config_panel_key();
+  test_parse_activate_takes_a_decimal_window_handle();
   test_output_never_blocks_producer();
   test_alt_drag_opens_wheel_and_releases();
   test_plain_click_passes_through();

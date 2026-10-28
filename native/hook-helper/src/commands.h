@@ -7,11 +7,12 @@
 namespace lp {
 
 struct Command {
-  enum class Kind { Invalid, Config, SetEnabled, Suspend, Shutdown, SimEvent, SimTick, StaleWatch } kind = Kind::Invalid;
+  enum class Kind { Invalid, Config, SetEnabled, Suspend, Shutdown, SimEvent, SimTick, StaleWatch, Activate } kind = Kind::Invalid;
   Config config;      // Config
   bool flag = false;  // SetEnabled / Suspend / StaleWatch
   InputEvent event;   // SimEvent
   uint64_t timeMs = 0;  // SimEvent / SimTick
+  uint64_t window = 0;  // Activate: a native window handle of lolPing's
 };
 
 // Parses one stdin line. `current` supplies values for config fields missing from the message.

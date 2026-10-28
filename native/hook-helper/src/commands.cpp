@@ -103,6 +103,12 @@ Command parseCommand(const std::string& line, const Config& current) {
     c.flag = getBool(m, "on", false);
   } else if (type == "shutdown") {
     c.kind = Command::Kind::Shutdown;
+  } else if (type == "activate") {
+    // Decimal text, since a 64-bit handle doesn't fit a JSON number exactly. 19 digits always fit 64 bits.
+    const std::string w = getStr(m, "window");
+    if (w.empty() || w.size() > 19 || w.find_first_not_of("0123456789") != std::string::npos) return c;
+    c.kind = Command::Kind::Activate;
+    c.window = std::stoull(w);
   } else if (type == "sim") {
     const std::string ev = getStr(m, "ev");
     c.timeMs = static_cast<uint64_t>(getInt(m, "t", 0));

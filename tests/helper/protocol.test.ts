@@ -34,7 +34,7 @@ describe('hook-helper --simulate', () => {
   it('announces itself first', async () => {
     const events = await simulate([]);
     expect(events[0]).toEqual({ type: 'ready', version: HELPER_VERSION });
-    expect(HELPER_VERSION).toBe(6);
+    expect(HELPER_VERSION).toBe(7);
   });
 
   it('opens and releases the wheel on Alt+drag', async () => {
@@ -180,5 +180,10 @@ describe('hook-helper --simulate', () => {
   it('reports invalid commands as errors', async () => {
     const events = await simulate([{ type: 'bogus' }]);
     expect(events.some((e) => e.type === 'error')).toBe(true);
+  });
+
+  it('understands activate, and only with a decimal window handle', async () => {
+    expect((await simulate([{ type: 'activate', window: '1311492' }])).some((e) => e.type === 'error')).toBe(false);
+    expect((await simulate([{ type: 'activate', window: '0x1402' }])).some((e) => e.type === 'error')).toBe(true);
   });
 });

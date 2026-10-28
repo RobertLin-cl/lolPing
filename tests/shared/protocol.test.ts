@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { configCommand, parseHelperLine, serializeCommand } from '../../src/shared/protocol';
+import { activateCommand, configCommand, parseHelperLine, serializeCommand } from '../../src/shared/protocol';
 import { DEFAULT_FEATURES } from '../../src/shared/features';
 import { DEFAULT_SETTINGS, type Settings } from '../../src/shared/settings';
 import type { AskTrigger } from '../../src/shared/teammate/settings';
@@ -160,5 +160,19 @@ describe('commands', () => {
     const line = serializeCommand({ type: 'suspend', on: true });
     expect(line).toBe('{"type":"suspend","on":true}\n');
     expect(line.indexOf('\n')).toBe(line.length - 1);
+  });
+
+  it('turns a native window handle into the activate command as decimal text', () => {
+    const wide = Buffer.alloc(8);
+    wide.writeBigUInt64LE(0x0014_0a02n);
+    expect(activateCommand(wide)).toEqual({ type: 'activate', window: '1313282' });
+    wide.writeBigUInt64LE(0x7fff_ffff_ffff_ffffn); // beyond a JSON number's exact range, still exact as text
+    expect(activateCommand(wide)).toEqual({ type: 'activate', window: '9223372036854775807' });
+    const narrow = Buffer.alloc(4);
+    narrow.writeUInt32LE(0x0014_0a02);
+    expect(activateCommand(narrow)).toEqual({ type: 'activate', window: '1313282' });
+    // A slice of a larger buffer reads only its own bytes.
+    const slice = Buffer.concat([Buffer.from([0xff, 0xff]), wide]).subarray(2);
+    expect(activateCommand(slice)).toEqual({ type: 'activate', window: '9223372036854775807' });
   });
 });

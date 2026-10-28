@@ -46,7 +46,7 @@ void Output::line(std::string s) {
 void Output::emit(const Emit& e) { line(formatEmit(e)); }
 
 // Version 6: the config takes askDoubleTap; askWords and scroll events and the staleWatch command are new.
-void Output::ready() { line("{\"type\":\"ready\",\"version\":6}"); }
+void Output::ready() { line("{\"type\":\"ready\",\"version\":7}"); }
 
 void Output::error(const std::string& message) { line("{\"type\":\"error\",\"message\":\"" + jsonEscape(message) + "\"}"); }
 

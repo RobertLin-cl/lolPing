@@ -57,6 +57,7 @@ int runSimulate(Output& out) {
       case Command::Kind::Shutdown: return 0;
       case Command::Kind::SimEvent: report(out, d.onEvent(c.event), true); break;
       case Command::Kind::SimTick: report(out, d.tick(c.timeMs), true); break;
+      case Command::Kind::Activate: break;  // a simulation has no windows to bring forward
       case Command::Kind::Invalid: out.error("invalid command: " + line); break;
     }
   }
