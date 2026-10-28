@@ -75,19 +75,38 @@ input.addEventListener('input', (event) => {
   if (words) showHint(words.hint, false);
 });
 input.addEventListener('compositionend', clamp);
+/**
+ * The key whose release gives the keyboard back: Esc, or Enter on an empty box. Leaving on the press would drop the
+ * key's release into the app underneath, and some (a terminal app such as a coding agent) read that as the key itself.
+ */
+let leaveOnKeyUp: 'Escape' | 'Enter' | null = null;
+
 input.addEventListener('keydown', (event) => {
   if (event.isComposing) return;
   if (event.key === 'Enter') {
     event.preventDefault();
     // Enter on an empty box gives the keyboard back, as in League.
-    if (input.value.trim() === '') window.textApi.cancel();
+    if (input.value.trim() === '') leaveOnKeyUp = 'Enter';
     else void send();
-  } else if (event.key === 'Escape') {
-    event.preventDefault();
-    window.textApi.cancel();
   } else if (event.key === 'Tab') {
     event.preventDefault(); // focus leaving the box would leave Enter and Esc with nothing to hear them
   }
+});
+// Esc works wherever the keyboard is in the window, not only in the box (after a click on the log, say).
+document.addEventListener('keydown', (event) => {
+  if (event.isComposing || event.key !== 'Escape') return;
+  event.preventDefault();
+  leaveOnKeyUp = 'Escape';
+});
+document.addEventListener('keyup', (event) => {
+  if (leaveOnKeyUp === null || event.key !== leaveOnKeyUp) return;
+  event.preventDefault();
+  leaveOnKeyUp = null;
+  window.textApi.cancel();
+});
+// A press whose release came after the keyboard had already gone elsewhere (a click outside) leaves nothing pending.
+window.addEventListener('blur', () => {
+  leaveOnKeyUp = null;
 });
 hideButton.addEventListener('click', () => window.textApi.hide());
 // Whenever the window gets the keyboard (the shortcut, or a click anywhere on it), the box has it.
@@ -112,3 +131,4 @@ window.textApi.onLines((lines) => {
 void window.textApi.lines().then((lines) => {
   if (!pushed) showLines(lines);
 });
+requestAnimationFrame(() => input.focus());

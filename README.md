@@ -169,7 +169,8 @@ Each ping asks for something. You can rename each one, change what it asks for, 
 - The wheel can't open over windows running as administrator, such as Task Manager. Windows hides their input from normal apps.
 - Exclusive-fullscreen games draw above the overlay.
 - Sharing a single window doesn't include the pings. Share your entire screen instead.
-- While you are in a room, Ctrl + Enter opens the text box instead of reaching the app underneath. Change the shortcut, or turn room text off, in Settings → Room and Settings → Features.
+- On Windows, if you were just typing in another app (a terminal, say), Windows may not let the chat window take the keyboard: it shows, but your keys, Esc included, still go to that app. Click the chat window's box once to type in it.
+- While you are in a room, Ctrl + Enter opens the chat window instead of reaching the app underneath. Change the shortcut, or turn room text off, in Settings → Room and Settings → Features.
 - While lolPing is on, Ctrl + drag opens the emote wheel instead of copying files or text. Pick another emote key, or turn it off, in Settings → Emotes.
 - The AI teammate isn't available on Linux yet. It can't paste into windows running as administrator, and it can't fill form fields that an app hides from accessibility tools.
 - On a Mac, the wheel can't open while a secure screen is showing, such as the login window or a password prompt, and Accessibility has to be allowed again after each update.

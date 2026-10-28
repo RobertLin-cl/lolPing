@@ -107,6 +107,7 @@ function reveal(w: BrowserWindow, focus: boolean): void {
   if (focus) {
     w.show();
     w.focus();
+    w.webContents.focus(); // the page itself, so its box gets the keys and not just the frame
   } else if (!w.isVisible()) {
     w.showInactive();
   }
@@ -119,7 +120,7 @@ function reveal(w: BrowserWindow, focus: boolean): void {
  */
 function giveKeyboardBack(): void {
   const w = textWindow();
-  if (!w?.isFocused()) return;
+  if (!w?.isVisible()) return;
   // Hiding hands the keyboard to the window that had it before; showing again without activating keeps it there.
   w.hide();
   w.showInactive();
