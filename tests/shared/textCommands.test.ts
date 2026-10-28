@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_TEXT } from '../../src/shared/roomProtocol';
 import type { RoomMember } from '../../src/shared/room';
-import { commandMatches, completeCommand, muteToggle, parseTextInput } from '../../src/shared/textCommands';
+import { commandMatches, completeCommand, muteToggle, parseTextInput, whisperTarget } from '../../src/shared/textCommands';
 
 describe('parseTextInput', () => {
   it('reads /ff and /surrender, in any case and with spaces around', () => {
@@ -41,9 +41,10 @@ describe('parseTextInput', () => {
 
 describe('commandMatches', () => {
   it('offers the commands that start with what was typed, in any case', () => {
-    expect(commandMatches('/r')).toEqual(['/ready']);
+    expect(commandMatches('/re')).toEqual(['/ready']);
+    expect(commandMatches('/r')).toEqual(['/r ', '/ready']);
     expect(commandMatches('/N')).toEqual(['/noff']);
-    expect(commandMatches('/')).toEqual(['/ff', '/mute ', '/noff', '/ready', '/surrender']);
+    expect(commandMatches('/')).toEqual(['/ff', '/mute ', '/noff', '/r ', '/ready', '/surrender', '/w ']);
     expect(commandMatches('/ff')).toEqual(['/ff']);
   });
 
@@ -65,17 +66,17 @@ describe('completeCommand', () => {
   it('cycles through the matches on each press while the box shows its last completion, and wraps round', () => {
     let step = completeCommand('/', null);
     const seen: string[] = [];
-    for (let i = 0; i < 6 && step; i++) {
+    for (let i = 0; i < 8 && step; i++) {
       seen.push(step.value);
       step = completeCommand(step.value, step.cycle);
     }
-    expect(seen).toEqual(['/ff', '/mute ', '/noff', '/ready', '/surrender', '/ff']);
+    expect(seen).toEqual(['/ff', '/mute ', '/noff', '/r ', '/ready', '/surrender', '/w ', '/ff']);
   });
 
   it('cycles backwards with Shift+Tab, starting from the last match', () => {
     const first = completeCommand('/', null, true);
-    expect(first?.value).toBe('/surrender');
-    expect(first && completeCommand(first.value, first.cycle, true)?.value).toBe('/ready');
+    expect(first?.value).toBe('/w ');
+    expect(first && completeCommand(first.value, first.cycle, true)?.value).toBe('/surrender');
   });
 
   it('starts again from the box when it was edited after a completion', () => {
@@ -179,5 +180,67 @@ describe('/mute', () => {
   it('treats members who share a name alike: muted unless every one of them already is', () => {
     const twins = [member('x', 'Player', { muted: true }), member('y', 'Player')];
     expect(muteToggle(twins, 'player')).toEqual({ peers: ['x', 'y'], on: true, name: 'Player' });
+  });
+});
+
+describe('/w and /r', () => {
+  const member = (peer: string, name: string, self = false): RoomMember => ({
+    peer, name, color: 0, rgb: null, path: 'lan', status: 'on', needsUpdate: false, noEmotes: false, noChat: false,
+    textOff: false, votesOff: false, muted: false, self,
+  });
+  const members = [member('me', 'Robert', true), member('a', 'Ahri'), member('b', 'Ahri 小队长'), member('c', 'Garen')];
+  const peers = (r: ReturnType<typeof whisperTarget>): string[] | undefined => r?.to.map((m) => m.peer);
+
+  it('reads everything after /w as the name and the message, and after /r as the message', () => {
+    expect(parseTextInput('/w Garen  push top ')).toEqual({ kind: 'whisper', rest: 'Garen  push top' });
+    expect(parseTextInput('/W')).toEqual({ kind: 'whisper', rest: '' });
+    expect(parseTextInput('/r on my way')).toEqual({ kind: 'reply', text: 'on my way' });
+    expect(parseTextInput('/R')).toEqual({ kind: 'reply', text: '' });
+    expect(parseTextInput('/ready')).toEqual({ kind: 'ready' });
+    expect(parseTextInput('/whisper Garen hi')).toEqual({ kind: 'unknown' });
+  });
+
+  it('finds the member whose name starts the rest, in any case, and keeps the message after it', () => {
+    expect(peers(whisperTarget(members, 'garen push top'))).toEqual(['c']);
+    expect(whisperTarget(members, 'garen push top')?.text).toBe('push top');
+    expect(whisperTarget(members, 'Garen')?.text).toBe('');
+  });
+
+  it('takes the longest name that fits, since names can hold spaces', () => {
+    const r = whisperTarget(members, 'Ahri 小队长 gank mid');
+    expect(peers(r)).toEqual(['b']);
+    expect(r?.text).toBe('gank mid');
+    expect(peers(whisperTarget(members, 'Ahri 小 gank'))).toEqual(['a']);
+  });
+
+  it('needs the whole name: a name that only starts a word is no match', () => {
+    expect(whisperTarget(members, 'Garenx hi')).toBeNull();
+    expect(whisperTarget(members, 'Gar hi')).toBeNull();
+  });
+
+  it('never whispers us, and finds nobody for a name not in the room', () => {
+    expect(whisperTarget(members, 'Robert hi')).toBeNull();
+    expect(whisperTarget(members, 'Nobody hi')).toBeNull();
+    expect(whisperTarget(members, '')).toBeNull();
+  });
+
+  it('whispers every member who shares the name', () => {
+    expect(peers(whisperTarget([...members, member('d', 'garen')], 'Garen hi'))).toEqual(['c', 'd']);
+  });
+
+  it('completes the names after /w, with a space for the message, and nothing once the message has begun', () => {
+    const names = ['Ahri', 'Ahri 小队长', 'Garen'];
+    const command = completeCommand('/w', null, false, names);
+    expect(command?.value).toBe('/w ');
+    let step = command && completeCommand(command.value, command.cycle, false, names);
+    const seen: string[] = [];
+    for (let i = 0; i < 4 && step; i++) {
+      seen.push(step.value);
+      step = completeCommand(step.value, step.cycle, false, names);
+    }
+    expect(seen).toEqual(['/w Ahri ', '/w Ahri 小队长 ', '/w Garen ', '/w Ahri ']);
+    expect(completeCommand('/w g', null, false, names)?.value).toBe('/w Garen ');
+    expect(completeCommand('/w Garen ', null, false, names)).toBeNull();
+    expect(completeCommand('/w all', null, false, names)).toBeNull(); // "all" is /mute's alone
   });
 });

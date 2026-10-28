@@ -137,12 +137,21 @@ export interface TextBoxText {
   unknown: string;
   /** Shown instead of the hint for a vote command while votes are switched off. */
   votesOff: string;
-  /** Shown instead of the hint when /mute named nobody in the room. */
+  /** Shown instead of the hint when /mute or /w named nobody in the room. */
   noMember: string;
+  /** Shown instead of the hint for /w or /r without a message. */
+  noMessage: string;
+  /** Shown instead of the hint for /r when nobody in the room has whispered us. */
+  noReply: string;
+  /** Shown instead of the hint when the member named can't take a whisper. */
+  cantWhisper: string;
+  /** Before the member's name on a whisper we sent, and on one we got. */
+  whisperTo: string;
+  whisperFrom: string;
 }
 
 /** What the app made of a submit: 'sent' empties the box for the next line, the others keep the text with a hint. */
-export type TextAnswer = 'sent' | 'unknown' | 'votesOff' | 'noMember';
+export type TextAnswer = 'sent' | 'unknown' | 'votesOff' | 'noMember' | 'noMessage' | 'noReply' | 'cantWhisper';
 
 export interface TextApi {
   /** Resolves with the app's answer. The box keeps the keyboard either way, so several lines can be typed in a row. */
@@ -154,7 +163,7 @@ export interface TextApi {
   lines(): Promise<HistoryLine[]>;
   /** Called with all the lines again whenever one is added or the room is left. Returns a function that stops it. */
   onLines(cb: (lines: HistoryLine[]) => void): () => void;
-  /** The other members' names, for Tab after /mute. */
+  /** The other members' names, for Tab after /mute and /w. */
   names(): Promise<string[]>;
   /** The pointer came onto the window or left it: the window doesn't hide by itself while the pointer is over it. */
   hover(on: boolean): void;

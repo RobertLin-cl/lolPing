@@ -1,14 +1,17 @@
+import { randomBytes } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  makeIdentity, open, peerIdOf, publicKeyOf, seal, signBody, verifyBody, type RoomIdentity, type RoomKeys,
+  makeIdentity, makeWhisperKeys, open, openWhisper, peerIdOf, publicKeyOf, seal, sealWhisper, signBody, verifyBody,
+  type RoomIdentity, type RoomKeys, type WhisperKeys,
 } from '../../src/main/roomCrypto';
 import {
-  MAX_MEMBERS, RoomManager, type RemoteEmote, type RemotePing, type RemoteText, type RoomToast,
+  MAX_MEMBERS, RoomManager, type RemoteEmote, type RemotePing, type RemoteText, type RemoteWhisper, type RoomToast,
 } from '../../src/main/roomManager';
 import { formatRoomCode, makeRoomCode } from '../../src/shared/roomCode';
 import type { TagRgb } from '../../src/shared/roomColors';
 import {
   decodeMessage, decodeSigned, encodeMessage, joinSigned, type BallotMsg, type RoomFeatureOff, type RoomMessage, type VoteMsg,
+  type WhisperMsg,
 } from '../../src/shared/roomProtocol';
 import { FakeTransport } from './fixtures/fakeTransport';
 
@@ -1303,5 +1306,143 @@ describe('signed members', () => {
     lan.sent.length = 0;
     room.sendToLan(sam.peer, { t: 'want', to: sam.peer, h: 'cd'.repeat(16), need: [] });
     expect(lan.sent.map((x) => x.to)).toEqual(['lan:s']);
+  });
+});
+
+/** A member with whispers: its presence announces a whisper key, and it seals whispers the way the app does. */
+class WhisperRemote extends SignedRemote {
+  readonly wk: WhisperKeys;
+  constructor(seed: number, key: string, lan: FakeTransport) {
+    super(seed, key, lan);
+    this.wk = makeWhisperKeys(new Uint8Array(32).fill(seed + 1));
+  }
+  override presence(extra: Record<string, unknown> = {}): void {
+    super.presence({ xk: this.wk.pk.toString('base64'), ...extra });
+  }
+  /** A whisper sealed for `to`, as it would come over the relays: under a peer id that says nothing. */
+  whisperPacket(to: { peer: string; xk: Uint8Array }, text: string, ts = Date.now(), signer: RoomIdentity = this.id): Buffer {
+    const sealed = sealWhisper(signer, { from: this.peer, ts, text }, to, randomBytes(32));
+    if (!sealed) throw new Error('could not seal');
+    const msg: WhisperMsg = {
+      t: 'whisper', peer: randomBytes(8).toString('hex'), seq: 1, ts,
+      e: sealed.e.toString('base64'), b: sealed.box.toString('base64'),
+    };
+    return seal(KEYS.msgKey, encodeMessage(msg));
+  }
+}
+
+describe('whispers', () => {
+  let sam: WhisperRemote;
+  let whispers: RemoteWhisper[];
+  /** Our keys, as our presence announces them: the one whispers to us are sealed to, and the one we sign with. */
+  const ours = (): { peer: string; xk: Uint8Array; pk: Buffer } => {
+    const presence = sentMessages().find((m) => m.t === 'presence');
+    if (presence?.t !== 'presence' || !presence.xk || !presence.pk) throw new Error('no keys in our presence');
+    return { peer: room.self, xk: Buffer.from(presence.xk, 'base64'), pk: Buffer.from(presence.pk, 'base64') };
+  };
+
+  beforeEach(async () => {
+    whispers = [];
+    room.on('whisper', (w: RemoteWhisper) => whispers.push(w));
+    await joinActive();
+    sam = new WhisperRemote(7, 'lan:s', lan);
+    sam.presence({ name: 'Sam', app: '0.6.2' });
+  });
+
+  it('sends a whisper only to the member, on its own, naming neither of us outside the box', () => {
+    const us = ours();
+    lan.sent.length = 0;
+    expect(room.whisper(sam.peer, 'gank mid')).toBe(true);
+    expect(lan.sent).toHaveLength(1);
+    const [sent] = lan.sent;
+    expect(sent).toMatchObject({ to: 'lan:s', unlinked: true });
+    const plain = open(KEYS.msgKey, sent.packet);
+    if (!plain) throw new Error('unsealed');
+    const decoded = decodeSigned(plain);
+    if (decoded?.msg.t !== 'whisper') throw new Error('not a whisper');
+    expect(decoded.sig).toBeNull();
+    expect(decoded.msg.peer).not.toBe(room.self);
+    expect(new TextDecoder().decode(plain)).not.toContain(sam.peer);
+    const keyOf = (p: string) => (p === room.self ? publicKeyOf(us.pk) : null);
+    const w = openWhisper(sam.wk, sam.peer, Buffer.from(decoded.msg.e, 'base64'), Buffer.from(decoded.msg.b, 'base64'), keyOf);
+    expect(w).toMatchObject({ from: room.self, text: 'gank mid' });
+  });
+
+  it('leaves no gap in our numbering that would tell the others we sent something', () => {
+    room.sendPing('danger', { d: 1, x: 0.5, y: 0.5 });
+    room.whisper(sam.peer, 'hi');
+    room.sendPing('danger', { d: 1, x: 0.5, y: 0.5 });
+    const seqs = sentMessages().filter((m) => m.peer === room.self).map((m) => m.seq);
+    expect(seqs).toEqual(seqs.map((_, i) => seqs[0] + i));
+  });
+
+  it('will not whisper a member who cannot take one', () => {
+    const old = new SignedRemote(12, 'lan:o', lan);
+    old.presence({ name: 'Old' }); // a signed app with no whisper key
+    const quiet = new WhisperRemote(13, 'lan:q', lan);
+    quiet.presence({ name: 'Quiet', nf: ['text'] });
+    const unsigned = new Remote('3333333333333333', 'lan:u', lan);
+    unsigned.presence({ name: 'Liar', xk: sam.wk.pk.toString('base64') }); // a key nobody vouched for
+    lan.sent.length = 0;
+    for (const p of [old.peer, quiet.peer, unsigned.peer, room.self, '9999999999999999']) expect(room.whisper(p, 'hi')).toBe(false);
+    expect(lan.sent).toHaveLength(0);
+  });
+
+  it('sends nothing while paused, as with text', () => {
+    room.setStatusFlags({ paused: true, roomMuted: false });
+    lan.sent.length = 0;
+    expect(room.whisper(sam.peer, 'hi')).toBe(true);
+    expect(lan.sent).toHaveLength(0);
+  });
+
+  it('opens a whisper sealed for us and says who sent it', () => {
+    lan.deliver('net:once', sam.whisperPacket(ours(), 'come bot'));
+    expect(whispers).toEqual([{ peer: sam.peer, tag: { name: 'Sam', color: 2, rgb: null }, text: 'come bot' }]);
+  });
+
+  it('shows a whisper caught and sent again only once', () => {
+    const packet = sam.whisperPacket(ours(), 'come bot');
+    lan.deliver('net:once', packet);
+    lan.deliver('net:again', packet);
+    expect(whispers).toHaveLength(1);
+  });
+
+  it('ignores whispers sealed for someone else, forged, or too old', () => {
+    const kim = new WhisperRemote(14, 'lan:k', lan);
+    kim.presence({ name: 'Kim' });
+    lan.deliver('net:x', sam.whisperPacket({ peer: kim.peer, xk: kim.wk.pk }, 'not for you'));
+    lan.deliver('net:x', sam.whisperPacket(ours(), 'from someone else', Date.now(), makeIdentity(new Uint8Array(32).fill(9))));
+    lan.deliver('net:x', sam.whisperPacket(ours(), 'old', Date.now() - 11 * 60 * 1000));
+    expect(whispers).toHaveLength(0);
+  });
+
+  it('drops whispers from a muted member, and while we are paused or muted', () => {
+    room.muteMember(sam.peer, true);
+    lan.deliver('net:x', sam.whisperPacket(ours(), 'a'));
+    room.muteMember(sam.peer, false);
+    room.setStatusFlags({ paused: true, roomMuted: false });
+    lan.deliver('net:x', sam.whisperPacket(ours(), 'b'));
+    room.setStatusFlags({ paused: false, roomMuted: true });
+    lan.deliver('net:x', sam.whisperPacket(ours(), 'c'));
+    expect(whispers).toHaveLength(0);
+  });
+
+  it('tries at most 20 whispers a second, so a flood of them costs little', () => {
+    const kim = new WhisperRemote(14, 'lan:k', lan);
+    kim.presence({ name: 'Kim' });
+    for (let i = 0; i < 20; i++) lan.deliver('net:x', sam.whisperPacket({ peer: kim.peer, xk: kim.wk.pk }, 'not for us'));
+    lan.deliver('net:x', sam.whisperPacket(ours(), 'lost in the flood'));
+    expect(whispers).toHaveLength(0);
+    vi.advanceTimersByTime(1000);
+    lan.deliver('net:x', sam.whisperPacket(ours(), 'heard'));
+    expect(whispers.map((w) => w.text)).toEqual(['heard']);
+  });
+
+  it('never takes a whisper as a new route to its sender', () => {
+    lan.deliver('net:once', sam.whisperPacket(ours(), 'hi'));
+    expect(whispers).toHaveLength(1);
+    lan.sent.length = 0;
+    room.whisper(sam.peer, 'back');
+    expect(lan.sent.map((s) => s.to)).toEqual(['lan:s']);
   });
 });

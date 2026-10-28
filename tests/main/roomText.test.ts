@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { describe, expect, it } from 'vitest';
 import { RoomHistory } from '../../src/main/roomHistory';
 import { postLine, startRoomText, type RoomTextDeps } from '../../src/main/roomText';
-import type { RemoteText } from '../../src/main/roomManager';
+import type { RemoteText, RemoteWhisper } from '../../src/main/roomManager';
 import { strings } from '../../src/shared/i18n';
 import type { RoomMember } from '../../src/shared/room';
 
@@ -25,14 +25,16 @@ function setup(lang: 'en' | 'zh-CN' = 'en') {
   const room = new FakeRoom();
   const history = new RoomHistory();
   const shown: Shown[] = [];
+  const whispered: string[] = [];
   const deps: RoomTextDeps = {
     room: room as unknown as RoomTextDeps['room'],
     show: (p) => shown.push(p),
     history,
     text: () => strings(lang),
     now: () => 1234,
+    whispered: (peer) => whispered.push(peer),
   };
-  return { room, history, shown, deps, stop: startRoomText(deps) };
+  return { room, history, shown, whispered, deps, stop: startRoomText(deps) };
 }
 
 const spoken = (over: Partial<RemoteText>): RemoteText => ({
@@ -85,13 +87,27 @@ describe('startRoomText', () => {
     expect(shown).toEqual([]);
   });
 
+  it('keeps a whisper in the history only, under the sender\'s tag, and says who sent it', () => {
+    const { room, shown, history, whispered } = setup();
+    const whisper: RemoteWhisper = { peer: 'alex', tag: { name: 'Alex', color: 2, rgb: [10, 20, 30] }, text: 'come bot' };
+    room.emit('whisper', whisper);
+    expect(shown).toEqual([]); // it has no spot on the screen
+    expect(history.lines()).toEqual([
+      { at: 1234, kind: 'whisperFrom', tag: { name: 'Alex', color: 2, rgb: [10, 20, 30] }, text: 'come bot' },
+    ]);
+    expect(whispered).toEqual(['alex']);
+  });
+
   it('stops listening when stopped', () => {
-    const { room, shown, history, stop } = setup();
+    const { room, shown, history, whispered, stop } = setup();
     stop();
     room.emit('remoteText', spoken({}));
+    room.emit('whisper', { peer: 'alex', tag: { name: 'Alex', color: 2, rgb: null }, text: 'hi' } satisfies RemoteWhisper);
     expect(shown).toEqual([]);
     expect(history.lines()).toEqual([]);
+    expect(whispered).toEqual([]);
     expect(room.listenerCount('remoteText')).toBe(0);
+    expect(room.listenerCount('whisper')).toBe(0);
   });
 });
 

@@ -24,6 +24,7 @@ node tools/room-peer/run.mjs PING-XXXXX-XXXXX --name Bot --rate 1
 | `--answer` | none | `yes` or `no`: answer every vote it sees with that ballot |
 | `--nf` | none | `text`, `votes` or `text,votes`: announce those room features as switched off |
 | `--legacy` | off | Act like lolPing 0.5.1: a random peer id and no signatures (see below) |
+| `--whisper` | none | A line to whisper back to every member who whispers this peer (see below) |
 | `--forge` | none | A member's peer id: 3 s after joining, send an unsigned bye and a ping with a huge sequence number claiming it (see below) |
 
 Start lolPing, create a room, copy the code and run the command with it. Several peers can run at once on different ports.
@@ -60,6 +61,14 @@ What it receives prints as `[in] text "<text>" from <name> on display <d> at x, 
 node tools/room-peer/run.mjs PING-XXXXX-XXXXX --app 0.5.2 --text "gg wp" --answer yes
 node tools/room-peer/run.mjs PING-XXXXX-XXXXX --app 0.5.2 --vote ff --rate 0
 node tools/room-peer/run.mjs PING-XXXXX-XXXXX --app 0.5.1 --rate 0
+```
+
+## Whispers
+
+Unless it runs with `--legacy`, the peer announces a whisper key, so lolPing can whisper it, and prints each whisper that opens for it as `[in] whisper "<text>" from <name>`. With `--whisper "on my way"` it whispers that line back to whoever whispered it, which gives lolPing a whisper to answer with `/r`. A second peer on another port sees nothing of a whisper between lolPing and the first one.
+
+```bash
+node tools/room-peer/run.mjs PING-XXXXX-XXXXX --app 0.5.2 --rate 0 --whisper "on my way"
 ```
 
 ## Over the internet path

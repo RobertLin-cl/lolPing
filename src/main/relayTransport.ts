@@ -106,9 +106,21 @@ export class RelayTransport extends EventEmitter implements Transport {
 
   broadcast(packet: Uint8Array): void {
     if (!this.pool || !this.pair) return;
-    const content = Buffer.from(packet.buffer, packet.byteOffset, packet.length).toString('base64');
-    const e = signEvent(this.pair, ROOM_EVENT_KIND, [['x', this.topic]], content, Math.floor(Date.now() / 1000));
+    const e = this.event(this.pair, packet);
     this.lastSent = this.pool.publish(e) > 0 ? e.id : null;
+  }
+
+  /**
+   * Every member still gets it, but under a key made for this one event: our other events are all signed with the
+   * same key, which would tell them it is ours.
+   */
+  sendUnlinked(_peer: PeerKey, packet: Uint8Array): void {
+    this.pool?.publish(this.event(makeKeyPair(), packet));
+  }
+
+  private event(pair: KeyPair, packet: Uint8Array): NostrEvent {
+    const content = Buffer.from(packet.buffer, packet.byteOffset, packet.length).toString('base64');
+    return signEvent(pair, ROOM_EVENT_KIND, [['x', this.topic]], content, Math.floor(Date.now() / 1000));
   }
 
   /** The Retry button. */

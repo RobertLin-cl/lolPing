@@ -20,6 +20,8 @@ export interface Transport extends EventEmitter {
   /** Sends nothing: RoomManager says bye before stopping. */
   stop(): void;
   sendTo(peer: PeerKey, packet: Uint8Array): void;
+  /** Like sendTo, but tied to none of our other packets, so the members it doesn't reach can't tell who sent it. */
+  sendUnlinked(peer: PeerKey, packet: Uint8Array): void;
   /** LAN: UDP broadcast. Internet: every connected peer. */
   broadcast(packet: Uint8Array): void;
   /** Resolves once a stop has finished flushing what was already sent (a bye). */

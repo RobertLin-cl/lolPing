@@ -151,3 +151,5 @@ button.tag:hover { text-decoration: underline; }
 .line .who { display: inline; margin-right: 6px; font-weight: 600; color: var(--tag); }
 .line .who::after { content: ":"; }
 .line.vote .said, .line.note .said { color: var(--gold-3); }
+.line .dir { margin-right: 4px; font-weight: 600; color: var(--violet); }
+.line.whisperTo .said, .line.whisperFrom .said { color: var(--violet); }

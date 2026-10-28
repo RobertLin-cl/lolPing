@@ -9,14 +9,14 @@ import { userInfo } from 'node:os';
 import { join } from 'node:path';
 import { resolveLang, strings, type Strings } from '../shared/i18n';
 import {
-  SETTINGS_CH, type About, type AppStatus, type PanelAction, type PanelState, type TeammateHistoryOp,
+  SETTINGS_CH, type About, type AppStatus, type PanelAction, type PanelState, type TeammateHistoryOp, type TextAnswer,
 } from '../shared/ipc';
 import { announcedEmoteHashes } from '../shared/emotes';
 import { featureOn, liveKeys, roomFeaturesOff } from '../shared/features';
 import { hotkeyLabel } from '../shared/keys';
 import { LOGO_TEXTURE } from '../shared/pings';
 import { activateCommand, configCommand, type HelperStatus } from '../shared/protocol';
-import type { RoomState } from '../shared/room';
+import type { RoomMember, RoomState } from '../shared/room';
 import type { VoteKind } from '../shared/roomProtocol';
 import { formatRoomCode, parseRoomCode } from '../shared/roomCode';
 import { sameTagRgb, tagWire } from '../shared/roomColors';
@@ -27,7 +27,7 @@ import type { ThreadRecord } from '../shared/teammate/history';
 import { openInRows, resumableProfile, resumeArgs } from '../shared/teammate/agentProfiles';
 import { wordsContinuesByDefault } from '../shared/teammate/threads';
 import type { HistoryState, MateAction, MateView } from '../shared/teammateIpc';
-import { muteToggle, parseTextInput } from '../shared/textCommands';
+import { muteToggle, parseTextInput, whisperTarget } from '../shared/textCommands';
 import { updateErrorText, type UpdateState } from '../shared/update';
 import { registerAppScheme, serveAppScheme } from './appProtocol';
 import { resolveTarget, toShared } from './displayNumbers';
@@ -484,10 +484,16 @@ function start(): void {
     history,
     now: Date.now,
   };
+  /** The member /r answers: the last one who whispered us, as in League. */
+  let replyTo: string | null = null;
+  const whispered = (peer: string): void => {
+    replyTo = peer;
+    showChat(); // a whisper only shows in the chat window, whatever the text style
+  };
   let stopRoomText: (() => void) | null = null;
   const syncRoomText = (): void => {
     const on = featureOn(settings, 'roomText');
-    if (on && !stopRoomText) stopRoomText = startRoomText({ room, ...lineDeps, text });
+    if (on && !stopRoomText) stopRoomText = startRoomText({ room, ...lineDeps, text, whispered });
     else if (!on && stopRoomText) {
       stopRoomText();
       stopRoomText = null;
@@ -502,6 +508,7 @@ function start(): void {
     if (s.phase === 'idle') {
       history.clear();
       memberNames.clear();
+      replyTo = null;
       closeTextWindow(); // its text and commands only make sense in a room, and a kick leaves it open otherwise
     }
     for (const m of s.members) memberNames.set(m.peer, m.name);
@@ -672,6 +679,14 @@ function start(): void {
     postLine(lineDeps, { kind: 'alive', owner: 'self', tag: ownTag(), ...spot, text: text().aliveLine(who.name) });
     if (shared) room.sendAlive(peer, shared);
   };
+  /** Whispers `message` to these members (several when they share the name) and logs it once, in our window only. */
+  const sendWhisper = (to: readonly RoomMember[], message: string): TextAnswer => {
+    const sent = to.filter((m) => room.whisper(m.peer, message));
+    if (sent.length === 0) return 'cantWhisper';
+    const { name, color, rgb } = sent[0];
+    history.push({ at: Date.now(), kind: 'whisperTo', tag: { name, color, rgb }, text: message });
+    return 'sent';
+  };
   registerTextWindow({
     submit: (raw, at) => {
       const input = parseTextInput(raw);
@@ -704,6 +719,16 @@ function start(): void {
           history.push({ at: Date.now(), kind: 'note', tag: null, text: note });
           return 'sent';
         }
+        case 'whisper': {
+          const target = whisperTarget(room.state().members, input.rest);
+          if (!target) return 'noMember';
+          return target.text ? sendWhisper(target.to, target.text) : 'noMessage';
+        }
+        case 'reply': {
+          if (!input.text) return 'noMessage';
+          const last = room.state().members.find((m) => m.peer === replyTo && !m.self);
+          return last ? sendWhisper([last], input.text) : 'noReply';
+        }
         default:
           return 'sent'; // nothing usable was typed
       }
@@ -712,7 +737,8 @@ function start(): void {
       const t = text();
       return {
         title: t.chatTitle, hide: t.chatHideButton, placeholder: t.textBoxPlaceholder, hint: t.textBoxHint, away: t.chatAway,
-        unknown: t.textBoxUnknown, votesOff: t.textBoxVotesOff, noMember: t.textBoxNoMember,
+        unknown: t.textBoxUnknown, votesOff: t.textBoxVotesOff, noMember: t.textBoxNoMember, noMessage: t.textBoxNoMessage,
+        noReply: t.textBoxNoReply, cantWhisper: t.textBoxCantWhisper, whisperTo: t.chatWhisperTo, whisperFrom: t.chatWhisperFrom,
       };
     },
     lines: () => history.lines(),

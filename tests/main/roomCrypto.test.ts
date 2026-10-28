@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  deriveRoomKeys, makeIdentity, MAX_PACKET, open, peerIdOf, publicKeyOf, seal, signBody, verifyBody,
+  deriveRoomKeys, makeIdentity, makeWhisperKeys, MAX_PACKET, open, openWhisper, peerIdOf, publicKeyOf, seal, sealWhisper, signBody,
+  verifyBody,
 } from '../../src/main/roomCrypto';
 import { PEER_RE } from '../../src/shared/roomProtocol';
 
@@ -87,5 +88,73 @@ describe('room signatures', () => {
     expect(verifyBody(key, body, Buffer.alloc(63).toString('base64'))).toBe(false);
     expect(verifyBody(key, body, '!!!')).toBe(false);
     expect(publicKeyOf(Buffer.alloc(31))).toBeNull();
+  });
+});
+
+describe('whispers', () => {
+  const alex = makeIdentity(new Uint8Array(32).fill(1));
+  const alexId = peerIdOf(alex.pk);
+  const kim = makeWhisperKeys(new Uint8Array(32).fill(2));
+  const kimId = '00112233445566ff';
+  const sam = makeWhisperKeys(new Uint8Array(32).fill(3));
+  const samId = '0011223344556677';
+  const keyOf = (peer: string) => (peer === alexId ? publicKeyOf(alex.pk) : null);
+  const whisper = { from: alexId, ts: 1_780_000_000_000, text: 'gank mid 小心' };
+  const seed = (n: number): Uint8Array => new Uint8Array(32).fill(n);
+  const sealed = sealWhisper(alex, whisper, { peer: kimId, xk: kim.pk }, seed(9));
+  if (!sealed) throw new Error('could not seal');
+
+  it('opens for the member it was sealed to, signed by the member it names', () => {
+    expect(openWhisper(kim, kimId, sealed.e, sealed.box, keyOf)).toEqual(whisper);
+  });
+
+  it('names neither end outside the box', () => {
+    for (const id of [alexId, kimId]) {
+      expect(sealed.box.includes(Buffer.from(id, 'hex'))).toBe(false);
+      expect(sealed.e.includes(Buffer.from(id, 'hex'))).toBe(false);
+    }
+    expect(sealed.e.equals(kim.pk)).toBe(false);
+  });
+
+  it('makes a new key for every whisper, so two of them look unrelated', () => {
+    const again = sealWhisper(alex, whisper, { peer: kimId, xk: kim.pk }, seed(10));
+    expect(again?.e.equals(sealed.e)).toBe(false);
+    expect(again?.box.equals(sealed.box)).toBe(false);
+  });
+
+  it('stays shut for anyone else, even one who has the box and claims to be the recipient', () => {
+    expect(openWhisper(sam, samId, sealed.e, sealed.box, keyOf)).toBeNull();
+    expect(openWhisper(sam, kimId, sealed.e, sealed.box, keyOf)).toBeNull();
+  });
+
+  it('refuses a box opened as someone it was not signed for', () => {
+    // Kim's key with another peer id: the signature names the member it was meant for.
+    expect(openWhisper(kim, samId, sealed.e, sealed.box, keyOf)).toBeNull();
+  });
+
+  it('refuses a whisper from someone who is not the member it names', () => {
+    const mallory = makeIdentity(new Uint8Array(32).fill(4));
+    const forged = sealWhisper(mallory, whisper, { peer: kimId, xk: kim.pk }, seed(11));
+    if (!forged) throw new Error('could not seal');
+    expect(openWhisper(kim, kimId, forged.e, forged.box, keyOf)).toBeNull();
+    expect(openWhisper(kim, kimId, sealed.e, sealed.box, () => null)).toBeNull(); // a sender we don't know
+  });
+
+  it('refuses any flipped byte, in the box or its key', () => {
+    for (const i of [0, 40, sealed.box.length - 1]) {
+      const box = Buffer.from(sealed.box);
+      box[i] ^= 1;
+      expect(openWhisper(kim, kimId, sealed.e, box, keyOf)).toBeNull();
+    }
+    const e = Buffer.from(sealed.e);
+    e[0] ^= 1;
+    expect(openWhisper(kim, kimId, e, sealed.box, keyOf)).toBeNull();
+  });
+
+  it('refuses keys that make no secret, and short boxes, without throwing', () => {
+    expect(sealWhisper(alex, whisper, { peer: kimId, xk: Buffer.alloc(32) }, seed(12))).toBeNull();
+    expect(sealWhisper(alex, whisper, { peer: kimId, xk: Buffer.alloc(31) }, seed(12))).toBeNull();
+    expect(openWhisper(kim, kimId, Buffer.alloc(32), sealed.box, keyOf)).toBeNull();
+    expect(openWhisper(kim, kimId, sealed.e, sealed.box.subarray(0, 95), keyOf)).toBeNull();
   });
 });

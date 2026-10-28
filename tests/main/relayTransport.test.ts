@@ -68,6 +68,21 @@ describe('RelayTransport', () => {
     expect(published(last()).map((e) => e.content)).toEqual(['CQ==']);
   });
 
+  it('sends an unlinked packet to everyone, under a key of its own each time, never the key of our other events', () => {
+    relay.start(KEYS);
+    last().open();
+    relay.broadcast(Uint8Array.from([1]));
+    relay.sendUnlinked('net:whoever', Uint8Array.from([2]));
+    relay.sendUnlinked('net:whoever', Uint8Array.from([3]));
+    const [ours, a, b] = published(last());
+    expect([a.content, b.content]).toEqual(['Ag==', 'Aw==']);
+    expect(new Set([ours.pubkey, a.pubkey, b.pubkey]).size).toBe(3);
+    for (const e of [a, b]) {
+      expect(e).toMatchObject({ kind: 24747, tags: [['x', KEYS.relayTopic]] });
+      expect(schnorr.verify(bytes(e.sig), bytes(e.id), bytes(e.pubkey))).toBe(true);
+    }
+  });
+
   it("emits packet(net:<pubkey>, bytes) for other members' events", () => {
     relay.start(KEYS);
     last().open();

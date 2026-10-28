@@ -1,14 +1,16 @@
 // A fake room member for trying rooms with one computer: it announces itself, pings at random spots and prints
-// the pings, emotes, text, alive lines and votes it receives. It can also send text, alive lines and votes. It speaks
-// the real protocol, using the app's own modules.
-import { createHash, randomBytes } from 'node:crypto';
+// the pings, emotes, text, alive lines, votes and whispers it receives. It can also send text, alive lines and votes,
+// and answer whispers. It speaks the real protocol, using the app's own modules.
+import { createHash, randomBytes, type KeyObject } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { checkStill } from '../../src/main/emoteLibrary';
 import { EmoteTransfer } from '../../src/main/emoteTransfer';
 import { LanTransport } from '../../src/main/lanTransport';
 import { RelayTransport } from '../../src/main/relayTransport';
-import { deriveRoomKeys, makeIdentity, open, peerIdOf, seal, signBody } from '../../src/main/roomCrypto';
+import {
+  deriveRoomKeys, makeIdentity, makeWhisperKeys, open, openWhisper, peerIdOf, publicKeyOf, seal, sealWhisper, signBody,
+} from '../../src/main/roomCrypto';
 import { RateLimiter } from '../../src/main/rateLimiter';
 import { RELAY_PING_BURST, RELAY_PING_RATE } from '../../src/main/roomManager';
 import type { Transport } from '../../src/main/transport';
@@ -17,6 +19,7 @@ import { ALL_PINGS } from '../../src/shared/pings';
 import { parseRoomCode } from '../../src/shared/roomCode';
 import {
   decodeMessage, encodeMessage, joinSigned, MAX_TEXT, PEER_RE, PROTOCOL_VERSION, sanitizeText, type RoomFeatureOff, type RoomMessage,
+  type WhisperMsg,
 } from '../../src/shared/roomProtocol';
 import { VOTE_MS } from '../../src/shared/voteTally';
 
@@ -40,19 +43,30 @@ const { values, positionals } = parseArgs({
     nf: { type: 'string' }, // room features announced as switched off: text, votes
     legacy: { type: 'boolean', default: false }, // act like 0.5.1: a random id, nothing signed
     forge: { type: 'string' }, // a member's peer id: once joined, send an unsigned bye and a huge-seq ping claiming it
+    whisper: { type: 'string' }, // a line to whisper back to every member who whispers this peer
   },
 });
 
 const parsed = parseRoomCode(positionals.join(' '));
 if (!parsed.ok) {
   console.error('usage: node tools/room-peer/run.mjs PING-XXXXX-XXXXX [--name Bot] [--color 0-7] [--rate 1] [--host 127.0.0.1] [--port 47475] [--display 1] [--relay] [--emotes] [--image still.webp]'
-    + ' [--app 0.5.2] [--text "hello"] [--alive] [--vote ff|ready] [--answer yes|no] [--nf text,votes] [--legacy] [--forge <peer id>]');
+    + ' [--app 0.5.2] [--text "hello"] [--alive] [--vote ff|ready] [--answer yes|no] [--nf text,votes] [--legacy] [--forge <peer id>]'
+    + ' [--whisper "hi"]');
   process.exit(1);
 }
 
 const text = values.text === undefined ? null : sanitizeText(values.text);
 if (text === '' || (values.text !== undefined && [...values.text].length > MAX_TEXT)) {
   console.error(`--text must be 1 to ${MAX_TEXT} characters`);
+  process.exit(1);
+}
+const whisperLine = values.whisper === undefined ? null : sanitizeText(values.whisper);
+if (whisperLine === '' || (values.whisper !== undefined && [...values.whisper].length > MAX_TEXT)) {
+  console.error(`--whisper must be 1 to ${MAX_TEXT} characters`);
+  process.exit(1);
+}
+if (whisperLine !== null && values.legacy) {
+  console.error('--whisper needs a signed peer: leave out --legacy');
   process.exit(1);
 }
 if (values.vote !== undefined && values.vote !== 'ff' && values.vote !== 'ready') {
@@ -77,6 +91,8 @@ const keys = await deriveRoomKeys(parsed.code);
 // Signed like the app unless --legacy: the id is the key's hash, and everything but a chunk carries a signature.
 const identity = values.legacy ? null : makeIdentity(randomBytes(32));
 const peer = identity ? peerIdOf(identity.pk) : randomBytes(8).toString('hex');
+// Whispers, as in the app: the key whispers to this peer are sealed to, announced in its signed presence.
+const whisperKeys = identity ? makeWhisperKeys(randomBytes(32)) : null;
 let seq = 0;
 function packet(body: Record<string, unknown>): Buffer {
   const bytes = encodeMessage({ peer, seq: ++seq, ts: Date.now(), ...body } as RoomMessage);
@@ -93,7 +109,8 @@ if (image && checkStill(image) !== null) {
 const imageHash = image ? createHash('sha256').update(image).digest('hex').slice(0, 32) : null;
 const presence = (): Buffer =>
   packet({ t: 'presence', proto: PROTOCOL_VERSION, app: values.app, name: values.name, color: Number(values.color), status: 'on',
-    em: imageHash ? [imageHash] : [], nf, ...(identity ? { pk: identity.pk.toString('base64') } : {}) });
+    em: imageHash ? [imageHash] : [], nf, ...(identity ? { pk: identity.pk.toString('base64') } : {}),
+    ...(whisperKeys ? { xk: whisperKeys.pk.toString('base64') } : {}) });
 
 const transport: Transport = values.relay
   ? new RelayTransport()
@@ -107,6 +124,24 @@ const answered = new Set<string>();
 const relayCap = new RateLimiter(Date.now);
 const names = new Map<string, string>(); // member peer ID → the name its presence announced
 const nameOf = (p: string): string => names.get(p) ?? p;
+// Member peer ID → the signing key its presence proved, and the whisper key it announced with it.
+const signers = new Map<string, KeyObject>();
+const whisperKeyOf = new Map<string, Buffer>();
+/** Whispers `line` to the member `to`, unlinked from our other packets, as the app sends one. */
+function whisper(to: string, line: string): void {
+  const xk = whisperKeyOf.get(to);
+  const key = values.relay ? 'net:' : lanKeys.get(to);
+  if (!identity || !xk || key === undefined) return;
+  if (values.relay && !relayCap.allow('internet', RELAY_PING_RATE, RELAY_PING_BURST)) return;
+  const sealed = sealWhisper(identity, { from: peer, ts: Date.now(), text: line }, { peer: to, xk }, randomBytes(32));
+  if (!sealed) return;
+  const msg: WhisperMsg = {
+    t: 'whisper', peer: randomBytes(8).toString('hex'), seq: 1, ts: Date.now(),
+    e: sealed.e.toString('base64'), b: sealed.box.toString('base64'),
+  };
+  transport.sendUnlinked(key, seal(keys.msgKey, encodeMessage(msg)));
+  console.log(`[out] whisper "${line}" to ${nameOf(to)}`);
+}
 const transfer = new EmoteTransfer({
   now: Date.now,
   have: (h) => h === imageHash || received.has(h),
@@ -141,8 +176,24 @@ transport.on('packet', (from: string, data: Uint8Array) => {
   const plain = open(keys.msgKey, data);
   const msg = plain && decodeMessage(plain);
   if (!msg || msg.peer === peer) return;
+  // A whisper's peer id is made for it alone: the box says who sent it, once it opens for us.
+  if (msg.t === 'whisper') {
+    const keyOf = (p: string): KeyObject | null => signers.get(p) ?? null;
+    const box = Buffer.from(msg.b, 'base64');
+    const w = whisperKeys && openWhisper(whisperKeys, peer, Buffer.from(msg.e, 'base64'), box, keyOf);
+    if (!w) return;
+    console.log(`[in] whisper "${w.text}" from ${nameOf(w.from)}`);
+    if (whisperLine) whisper(w.from, whisperLine);
+    return;
+  }
   lanKeys.set(msg.peer, from);
   if (msg.t === 'presence') names.set(msg.peer, msg.name);
+  const pk = msg.t === 'presence' && msg.pk ? Buffer.from(msg.pk, 'base64') : null;
+  const signer = pk && peerIdOf(pk) === msg.peer ? publicKeyOf(pk) : null;
+  if (msg.t === 'presence' && signer) {
+    signers.set(msg.peer, signer);
+    if (msg.xk) whisperKeyOf.set(msg.peer, Buffer.from(msg.xk, 'base64'));
+  }
   if (msg.t === 'want') {
     if (msg.to !== peer) return;
     console.log(`[in] want ${msg.h} ${msg.need.length ? `chunks ${msg.need.join(', ')}` : '(all chunks)'}`);

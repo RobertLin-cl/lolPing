@@ -105,6 +105,11 @@ export class LanTransport extends EventEmitter implements Transport {
     if (m) this.send(packet, Number(m[2]), m[1]);
   }
 
+  /** Straight to that one address: nobody else on the network gets it. */
+  sendUnlinked(peer: PeerKey, packet: Uint8Array): void {
+    this.sendTo(peer, packet);
+  }
+
   broadcast(packet: Uint8Array): void {
     if (this.opts.broadcast !== false) for (const host of this.targets) this.send(packet, this.port, host);
     for (const s of this.opts.seeds ?? []) this.send(packet, s.port, s.host);

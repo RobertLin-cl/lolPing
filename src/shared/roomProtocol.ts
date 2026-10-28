@@ -41,6 +41,8 @@ export interface PresenceMsg extends Base {
   nf: RoomFeatureOff[];
   /** Added in 0.5.2: the Ed25519 public key, raw, in base64. The peer id is its hash, and every message but a chunk is signed with it. */
   pk?: string;
+  /** Added after 0.6.1: the X25519 key whispers to this peer are sealed to, raw, in base64. Only a signed presence's counts. */
+  xk?: string;
 }
 export interface PingMsg extends Base {
   t: 'ping';
@@ -111,7 +113,19 @@ export interface ChunkMsg extends Base {
 export interface ByeMsg extends Base {
   t: 'bye';
 }
-export type RoomMessage = PresenceMsg | PingMsg | EmoteMsg | TextMsg | AliveMsg | VoteMsg | BallotMsg | WantMsg | ChunkMsg | ByeMsg;
+/**
+ * Added after 0.6.1: a whisper, sealed for one member (see sealWhisper). Unsigned, under a peer id made for it alone,
+ * so nothing outside the box says who sent it or to whom. Older apps drop it as an unknown type.
+ */
+export interface WhisperMsg extends Base {
+  t: 'whisper';
+  /** The X25519 public key made for this whisper, raw, in base64. */
+  e: string;
+  /** The sealed box, in base64. */
+  b: string;
+}
+export type RoomMessage =
+  PresenceMsg | PingMsg | EmoteMsg | TextMsg | AliveMsg | VoteMsg | BallotMsg | WantMsg | ChunkMsg | ByeMsg | WhisperMsg;
 
 // C0/C1 controls, zero-width characters, bidi marks, embeddings and isolates, BOM, line/paragraph separators,
 // soft hyphen, combining grapheme joiner, Arabic letter mark, Mongolian vowel separator and the Hangul fillers
@@ -149,6 +163,11 @@ export const EMOTE_CHUNKS_MAX = 17;
 /** Chunk indexes in a `want`'s `need`: at most this many entries, each below EMOTE_CHUNKS_MAX. */
 export const EMOTE_NEED_MAX = 64;
 const B64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
+/**
+ * A whisper's box `b` is at most this many base64 characters: the sender's id, clock and signature (80 bytes), the
+ * longest text in UTF-8 and the tag, 576 bytes in all.
+ */
+export const WHISPER_B64_MAX = 768;
 /** 32 raw bytes in base64. */
 const PK_RE = /^[A-Za-z0-9+/]{43}=$/;
 /** The signature tail: 64 raw bytes in base64, as the last field, so a receiver can cut it off and get the signed bytes. */
@@ -180,12 +199,13 @@ export function validateMessage(raw: unknown): RoomMessage | null {
   const base = { peer, seq, ts };
   switch (t) {
     case 'presence': {
-      const { proto, app, name, color, rgb, status, em, nf, pk } = raw;
+      const { proto, app, name, color, rgb, status, em, nf, pk, xk } = raw;
       if (!isUint(proto) || typeof app !== 'string' || app.length > MAX_APP_VERSION || typeof name !== 'string') return null;
       if (!isTagColor(color) || !STATUSES.includes(status as MemberStatus)) return null;
       const presence: PresenceMsg = {
         t, ...base, proto, app, name: sanitizeName(name.slice(0, 256)), color, status: status as MemberStatus,
         em: emList(em), nf: nfList(nf), ...(typeof pk === 'string' && PK_RE.test(pk) ? { pk } : {}),
+        ...(typeof xk === 'string' && PK_RE.test(xk) ? { xk } : {}),
       };
       // A malformed custom colour is dropped rather than the whole presence: an unreadable tag beats a missing member.
       return isTagRgb(rgb) ? { ...presence, rgb } : presence;
@@ -246,6 +266,12 @@ export function validateMessage(raw: unknown): RoomMessage | null {
     }
     case 'bye':
       return { t, ...base };
+    case 'whisper': {
+      const { e, b } = raw;
+      if (typeof e !== 'string' || !PK_RE.test(e)) return null;
+      if (typeof b !== 'string' || b.length > WHISPER_B64_MAX || b.length % 4 !== 0 || !B64_RE.test(b)) return null;
+      return { t, ...base, e, b };
+    }
     default:
       return null;
   }

@@ -785,7 +785,7 @@ const en = {
   // room text
   aliveLine: (name: string) => `${name} - Alive`,
   textBoxPlaceholder: 'Say something to the room, Enter to send',
-  textBoxHint: 'Commands: /ff /noff /ready /mute (Tab completes)',
+  textBoxHint: 'Commands: /ff /noff /ready /mute /w /r (Tab completes)',
   textBoxUnknown: 'Unknown command',
   textBoxNoMember: 'No one in the room by that name',
   chatMuted: (name: string) => `You muted ${name}`,
@@ -793,6 +793,11 @@ const en = {
   chatMutedAll: 'You muted everyone in the room',
   chatUnmutedAll: 'You unmuted everyone in the room',
   textBoxVotesOff: 'Votes are off',
+  textBoxNoMessage: 'Type the message to whisper',
+  textBoxNoReply: 'No one to reply to',
+  textBoxCantWhisper: "They can't get whispers",
+  chatWhisperTo: 'To',
+  chatWhisperFrom: 'From',
 
   // room votes
   votesOff: 'Votes are off',
@@ -1556,7 +1561,7 @@ const zh: Strings = {
 
   aliveLine: (name) => `${name} - 存活`,
   textBoxPlaceholder: '对房间说点什么，Enter 发送',
-  textBoxHint: '指令：/ff /noff /ready /mute（Tab 补全）',
+  textBoxHint: '指令：/ff /noff /ready /mute /w /r（Tab 补全）',
   textBoxUnknown: '未知指令',
   textBoxNoMember: '房间里没有这个名字的人',
   chatMuted: (name) => `已将 ${name} 静音`,
@@ -1564,6 +1569,11 @@ const zh: Strings = {
   chatMutedAll: '已将房间里所有人静音',
   chatUnmutedAll: '已取消房间里所有人的静音',
   textBoxVotesOff: '投票已关闭',
+  textBoxNoMessage: '请输入要私聊的内容',
+  textBoxNoReply: '没有可以回复的人',
+  textBoxCantWhisper: '对方收不到私聊',
+  chatWhisperTo: '发给',
+  chatWhisperFrom: '来自',
 
   votesOff: '投票已关闭',
   voteTitleFf: '投降？',

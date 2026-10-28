@@ -6,13 +6,14 @@ import type { JoinResult, MemberPath, RoomMember, RoomStateCore } from '../share
 import type { TagRgb } from '../shared/roomColors';
 import { formatRoomCode, makeRoomCode, parseRoomCode } from '../shared/roomCode';
 import {
-  decodeSigned, encodeMessage, isOlderThan, joinSigned, PROTOCOL_VERSION, ROOM_CHAT_SINCE, type BallotMsg, type MemberStatus,
-  type PresenceMsg, type RoomFeatureOff, type RoomMessage, type VoteKind, type VoteMsg,
+  decodeSigned, encodeMessage, isOlderThan, joinSigned, PROTOCOL_VERSION, ROOM_CHAT_SINCE, sanitizeText, type BallotMsg,
+  type MemberStatus, type PresenceMsg, type RoomFeatureOff, type RoomMessage, type VoteKind, type VoteMsg, type WhisperMsg,
 } from '../shared/roomProtocol';
 import { RateLimiter } from './rateLimiter';
-import { ReplayGuard } from './replayGuard';
+import { MAX_SKEW_MS, ReplayGuard } from './replayGuard';
 import {
-  makeIdentity, open, peerIdOf, publicKeyOf, seal, signBody, verifyBody, type RoomIdentity, type RoomKeys,
+  makeIdentity, makeWhisperKeys, open, openWhisper, peerIdOf, publicKeyOf, seal, sealWhisper, signBody, verifyBody,
+  type RoomIdentity, type RoomKeys, type WhisperKeys,
 } from './roomCrypto';
 import type { PeerKey, Transport, TransportStatus } from './transport';
 
@@ -36,6 +37,11 @@ const BALLOT_RATE = 0.5;
 const TRANSFER_RATE = 60;
 /** Presence asked for on a shared transport (a change, a new link, a new member): at most this often. */
 const SHARED_PRESENCE_MS = 1000;
+/**
+ * Whispers opened per second, from everyone together: a whisper names nobody outside its box, so every member tries
+ * each one that comes over the relays, and this keeps a flood of them from costing more than a few key exchanges.
+ */
+const WHISPER_TRY_RATE = 20;
 /** The first app version that shows emotes. */
 const EMOTES_SINCE = '0.5.0';
 const UNREACHABLE_MS = 20_000;
@@ -86,6 +92,13 @@ export interface RemoteText {
   who?: string;
 }
 
+/** A whisper a member sealed for us: nobody else in the room could read it, or tell it was theirs. */
+export interface RemoteWhisper {
+  peer: string;
+  tag: MemberTag;
+  text: string;
+}
+
 export type RoomToast =
   | { kind: 'joined' | 'left' | 'disconnected' | 'kicked'; name: string }
   | { kind: 'joinedRoom'; code: string }
@@ -129,12 +142,15 @@ interface Member {
   paths: Partial<Record<Transport['kind'], { key: PeerKey; seenAt: number }>>;
   /** The key their signed presence proved; null for a member on 0.5.1 or older, who signs nothing. */
   pk: KeyObject | null;
+  /** The whisper key their signed presence announced; null for an app without whispers. */
+  xk: Buffer | null;
 }
 
 /**
  * The room: who is in it, what we send, and what we let through. Talks to the network only through transports,
  * which carry sealed packets. Events: 'state' (RoomStateCore), 'remotePing' (RemotePing), 'remoteEmote' (RemoteEmote), 'toast' (RoomToast),
  * 'remoteText' (RemoteText: text and alive lines), 'vote' (VoteMsg), 'ballot' (BallotMsg), 'saveCode' (canonical code | null: what "rejoin last room" should remember), 'emotes' (peer, announced hashes),
+ * 'whisper' (RemoteWhisper),
  * 'want' (WantMsg), 'chunk' (ChunkMsg) and 'memberGone' (peer), which EmoteTransfer answers.
  */
 export class RoomManager extends EventEmitter {
@@ -144,6 +160,10 @@ export class RoomManager extends EventEmitter {
    */
   self: string;
   private identity: RoomIdentity;
+  private whisperKeys: WhisperKeys;
+  /** The key of every whisper opened lately, with its clock: one that someone caught and sends again shows once. */
+  private seenWhispers = new Map<string, number>();
+  private readonly whisperTries: RateLimiter;
   private phase: RoomStateCore['phase'] = 'idle';
   private code: string | null = null;
   private keys: RoomKeys | null = null;
@@ -190,12 +210,14 @@ export class RoomManager extends EventEmitter {
     super();
     this.identity = makeIdentity(deps.randomBytes(32));
     this.self = peerIdOf(this.identity.pk);
+    this.whisperKeys = makeWhisperKeys(deps.randomBytes(32));
     this.signedGuard = new ReplayGuard(deps.now);
     this.unsignedGuard = new ReplayGuard(deps.now);
     this.limiter = new RateLimiter(deps.now);
     this.transferLimiter = new RateLimiter(deps.now);
     this.ballotLimiter = new RateLimiter(deps.now);
     this.relayCap = new RateLimiter(deps.now);
+    this.whisperTries = new RateLimiter(deps.now);
     for (const t of deps.transports) {
       t.on('packet', (peer: PeerKey, packet: Uint8Array) => this.onPacket(t, peer, packet));
       t.on('peerGone', (peer: PeerKey) => this.onPeerGone(t, peer));
@@ -255,6 +277,31 @@ export class RoomManager extends EventEmitter {
 
   sendBallot(id: string, yes: boolean): void {
     this.sendShared({ t: 'ballot', id, yes });
+  }
+
+  /**
+   * Whispers `text` to one member. False when they can't take a whisper: an app without them, room text switched off,
+   * or a key nothing can be sealed to. Otherwise it goes the way text does: not while we are paused, and nowhere while
+   * they can't be reached.
+   */
+  whisper(peer: string, text: string): boolean {
+    const m = this.members.get(peer);
+    if (!m?.xk || m.textOff || m.needsUpdate) return false;
+    if (this.phase === 'idle' || !this.keys || this.paused) return true;
+    const now = this.deps.now();
+    const w = { from: this.self, ts: now, text };
+    const sealed = sealWhisper(this.identity, w, { peer, xk: m.xk }, this.deps.randomBytes(32));
+    if (!sealed) return false;
+    const route = this.route(m);
+    if (!route) return true;
+    if (route.transport.shared && !this.relayCap.allow(route.transport.kind, RELAY_PING_RATE, RELAY_PING_BURST)) return true;
+    // Unsigned, under a peer id made for it alone and outside our sequence: nothing outside the box says it is ours.
+    const peerOnce = Buffer.from(this.deps.randomBytes(8)).toString('hex');
+    const msg: WhisperMsg = {
+      t: 'whisper', peer: peerOnce, seq: 1, ts: now, e: sealed.e.toString('base64'), b: sealed.box.toString('base64'),
+    };
+    route.transport.sendUnlinked(route.key, seal(this.keys.msgKey, encodeMessage(msg)));
+    return true;
   }
 
   /** Removes a member and ignores that peer ID for the rest of the session, as if it had said bye. */
@@ -405,6 +452,8 @@ export class RoomManager extends EventEmitter {
     const session = ++this.session;
     this.identity = makeIdentity(this.deps.randomBytes(32));
     this.self = peerIdOf(this.identity.pk);
+    this.whisperKeys = makeWhisperKeys(this.deps.randomBytes(32));
+    this.seenWhispers = new Map();
     this.seq = 0;
     this.phase = 'joining';
     this.code = code;
@@ -488,6 +537,8 @@ export class RoomManager extends EventEmitter {
     if (now - this.lastTick > SLEEP_GAP_MS) this.wokeAt = now;
     this.lastTick = now;
     for (const [peer, s] of this.staleStrikes) if (now - s.at >= SKEW_HINT_MS) this.staleStrikes.delete(peer);
+    // Past the clock window, a whisper sent again is refused for its age.
+    for (const [e, ts] of this.seenWhispers) if (now - ts > MAX_SKEW_MS) this.seenWhispers.delete(e);
     for (const m of [...this.members.values()]) {
       const heard = Math.max(...Object.values(m.paths).map((p) => p.seenAt), m.firstSeen, this.wokeAt);
       if (now - heard >= DROP_MS[m.viaInternet ? 'internet' : 'lan']) this.remove(m, 'disconnected');
@@ -512,6 +563,7 @@ export class RoomManager extends EventEmitter {
       this.emit('chunk', msg);
       return;
     }
+    if (msg.t === 'whisper') return this.onWhisper(msg);
     let pk: KeyObject | null = null;
     if (sig) {
       pk = msg.t === 'presence' ? this.provenKey(msg) : this.members.get(msg.peer)?.pk ?? null;
@@ -571,6 +623,24 @@ export class RoomManager extends EventEmitter {
     }
   }
 
+  /**
+   * A whisper names nobody outside its box, so it can't pass the member gates until it is open: only one sealed for us
+   * and signed by a member gets that far. Then it meets the gates text does, and shares that member's budget.
+   */
+  private onWhisper(msg: WhisperMsg): void {
+    if (!this.whisperTries.allow('all', WHISPER_TRY_RATE)) return;
+    const keyOf = (p: string): KeyObject | null => this.members.get(p)?.pk ?? null;
+    const w = openWhisper(this.whisperKeys, this.self, Buffer.from(msg.e, 'base64'), Buffer.from(msg.b, 'base64'), keyOf);
+    if (!w || Math.abs(this.deps.now() - w.ts) > MAX_SKEW_MS || this.seenWhispers.has(msg.e)) return;
+    this.seenWhispers.set(msg.e, w.ts);
+    const m = this.members.get(w.from);
+    if (!m || this.paused || this.roomMuted || m.muted || m.needsUpdate) return;
+    if (!this.limiter.allow(m.peer, this.deps.profile().limit)) return;
+    const text = sanitizeText(w.text);
+    if (!text) return;
+    this.emit('whisper', { peer: m.peer, tag: { name: m.name, color: m.color, rgb: m.rgb }, text } satisfies RemoteWhisper);
+  }
+
   /** The key a signed presence carries, when its peer ID is that key's hash; null when it can't vouch for the ID. */
   private provenKey(msg: PresenceMsg): KeyObject | null {
     if (!msg.pk) return null;
@@ -595,7 +665,7 @@ export class RoomManager extends EventEmitter {
       m = {
         peer: msg.peer, name: msg.name, color: msg.color, rgb: msg.rgb ?? null, status: msg.status,
         needsUpdate: false, noEmotes: false, noChat: false, textOff: false, votesOff: false, muted: false, em: [],
-        firstSeen: this.deps.now(), viaInternet: false, paths: {}, pk: null,
+        firstSeen: this.deps.now(), viaInternet: false, paths: {}, pk: null, xk: null,
       };
       this.members.set(m.peer, m);
       this.aloneSince = null;
@@ -604,6 +674,7 @@ export class RoomManager extends EventEmitter {
       m.pk = pk;
       this.boundIds.add(m.peer);
     }
+    m.xk = pk && msg.xk ? Buffer.from(msg.xk, 'base64') : null;
     m.name = msg.name;
     m.color = msg.color;
     m.rgb = msg.rgb ?? null;
@@ -696,7 +767,7 @@ export class RoomManager extends EventEmitter {
     const p = this.deps.profile();
     return this.seal({
       t: 'presence', proto: PROTOCOL_VERSION, app: this.deps.appVersion, name: p.name, color: p.color, status: this.status(),
-      em: [...this.deps.announceEmotes()], pk: this.identity.pk.toString('base64'),
+      em: [...this.deps.announceEmotes()], pk: this.identity.pk.toString('base64'), xk: this.whisperKeys.pk.toString('base64'),
       // Left out when nothing is off, so a presence to an older peer carries nothing new.
       ...(p.nf.length ? { nf: [...p.nf] } : {}),
       // Left out rather than sent as null: a peer on an older build ignores it either way, and this keeps the packet small.

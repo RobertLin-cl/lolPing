@@ -1,6 +1,6 @@
 import type { Strings } from '../shared/i18n';
 import type { PingTag } from '../shared/ipc';
-import type { MemberTag, RemoteText, RoomManager } from './roomManager';
+import type { MemberTag, RemoteText, RemoteWhisper, RoomManager } from './roomManager';
 import type { HistoryLine } from '../shared/roomHistory';
 import type { RoomHistory } from './roomHistory';
 
@@ -11,6 +11,8 @@ export interface RoomTextDeps {
   history: RoomHistory;
   text(): Strings;
   now(): number;
+  /** A whisper from the member `peer` is in the history: /r answers them now, and the chat window should come up. */
+  whispered(peer: string): void;
 }
 
 export interface RoomLine {
@@ -32,8 +34,14 @@ export function postLine(deps: Pick<RoomTextDeps, 'show' | 'history' | 'now'>, l
   deps.history.push({ at: deps.now(), kind, tag: tag && { name: tag.name, color: tag.color, rgb: tag.rgb }, text });
 }
 
-/** Draws the text and alive lines other members send. Returns a function that stops it. */
+/** Draws the text and alive lines other members send, and keeps their whispers. Returns a function that stops it. */
 export function startRoomText(deps: RoomTextDeps): () => void {
+  // A whisper has no spot: it only goes to the history, which the chat window shows.
+  const onWhisper = (w: RemoteWhisper): void => {
+    const { name, color, rgb } = w.tag;
+    deps.history.push({ at: deps.now(), kind: 'whisperFrom', tag: { name, color, rgb }, text: w.text });
+    deps.whispered(w.peer);
+  };
   const onText = (p: RemoteText): void => {
     const common = { owner: p.peer, tag: p.tag, displayId: p.displayId, x: p.x, y: p.y };
     if (p.kind === 'text') {
@@ -45,7 +53,9 @@ export function startRoomText(deps: RoomTextDeps): () => void {
     if (who) postLine(deps, { ...common, kind: 'alive', text: deps.text().aliveLine(who.name) });
   };
   deps.room.on('remoteText', onText);
+  deps.room.on('whisper', onWhisper);
   return () => {
     deps.room.off('remoteText', onText);
+    deps.room.off('whisper', onWhisper);
   };
 }

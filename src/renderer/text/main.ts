@@ -29,8 +29,12 @@ function clamp(): void {
   count.classList.toggle('full', used >= MAX_TEXT);
 }
 
+/** The lines on show, drawn again once the words for a whisper's "To" and "From" arrive. */
+let shown: readonly HistoryLine[] = [];
+
 /** Names and lines come from other members: they only ever go in as text. */
 function showLines(lines: readonly HistoryLine[]): void {
+  shown = lines;
   // Someone reading older lines keeps their place; otherwise the newest line stays in view.
   const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 8;
   log.replaceChildren(...lines.map((line) => {
@@ -44,6 +48,13 @@ function showLines(lines: readonly HistoryLine[]): void {
     name.className = 'name';
     name.style.color = tagColorCss(line.tag.color, line.tag.rgb);
     name.textContent = `${line.tag.name}: `;
+    if (line.kind === 'whisperTo' || line.kind === 'whisperFrom') {
+      item.className = 'whisper';
+      const dir = document.createElement('span');
+      dir.className = 'dir';
+      dir.textContent = `${(line.kind === 'whisperTo' ? words?.whisperTo : words?.whisperFrom) ?? ''} `;
+      item.append(dir);
+    }
     item.append(name, line.text);
     return item;
   }));
@@ -66,16 +77,14 @@ async function send(): Promise<void> {
     input.value = '';
     clamp();
     if (words) showHint(words.hint, false);
-  } else if (answer === 'unknown') showHint(words?.unknown ?? '', true);
-  else if (answer === 'votesOff') showHint(words?.votesOff ?? '', true);
-  else if (answer === 'noMember') showHint(words?.noMember ?? '', true);
+  } else showHint(words?.[answer] ?? '', true); // each other answer has its words under its own name
 }
 
 // While an input method is composing, the box holds a draft: cutting it would break the composition, and Enter confirms it.
 /** Tab's place among the commands, while the box still shows its last completion. Typing starts it over. */
 let cycle: CompletionCycle | null = null;
 
-/** One press of Tab: a command, or after /mute a member's name. The names are asked for at each press: people come and go. */
+/** One press of Tab: a command, or after /mute or /w a name. The names are asked for at each press: people come and go. */
 async function completeInBox(back: boolean): Promise<void> {
   const typed = input.value;
   const names = await window.textApi.names();
@@ -156,6 +165,7 @@ void window.textApi.strings().then((t) => {
   hideButton.setAttribute('aria-label', t.hide);
   input.placeholder = t.placeholder;
   showHint(t.hint, false);
+  showLines(shown);
 });
 let pushed = false; // a pushed list is newer than a lines() reply that arrives after it
 window.textApi.onLines((lines) => {

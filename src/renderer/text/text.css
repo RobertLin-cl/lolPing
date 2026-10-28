@@ -14,6 +14,8 @@ main { display: flex; flex-direction: column; height: 100%; padding: 0 2px; colo
 #log li + li { margin-top: 2px; }
 #log .name { font-weight: 600; }
 #log .vote, #log .note { color: var(--gold-2); font-style: italic; }
+#log .whisper { color: var(--violet); }
+#log .whisper .dir { font-weight: 600; }
 .row { flex: none; display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; border: 1px solid var(--gold-5); background: url("/ui/options-field.png") 0 0 / 100% 100%; }
 .row:focus-within { border-color: var(--gold-4); }
 input { flex: 1; min-width: 0; height: 100%; border: 0; padding: 0; background: transparent; color: inherit; font: 600 15px/1 var(--sans); outline: none; }

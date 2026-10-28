@@ -6,7 +6,8 @@ import type { PeerKey, Transport, TransportStatus } from '../../../src/main/tran
 export class FakeTransport extends EventEmitter implements Transport {
   status: TransportStatus = 'off';
   started: RoomKeys | null = null;
-  sent: { to: PeerKey | '*'; packet: Uint8Array }[] = [];
+  /** `unlinked`: sent with sendUnlinked. */
+  sent: { to: PeerKey | '*'; packet: Uint8Array; unlinked?: true }[] = [];
   starts = 0;
   stops = 0;
   /** What start() reports: 'starting' holds it there, like relays that haven't answered yet. */
@@ -37,6 +38,10 @@ export class FakeTransport extends EventEmitter implements Transport {
 
   sendTo(peer: PeerKey, packet: Uint8Array): void {
     this.sent.push({ to: peer, packet });
+  }
+
+  sendUnlinked(peer: PeerKey, packet: Uint8Array): void {
+    this.sent.push({ to: peer, packet, unlinked: true });
   }
 
   broadcast(packet: Uint8Array): void {

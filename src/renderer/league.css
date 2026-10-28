@@ -4,6 +4,8 @@
   --gold-1: #f0e6d2; --gold-2: #cdbe91; --gold-3: #c8aa6e; --gold-4: #785a28; --gold-5: #463714;
   --grey-1: #a09b8c; --grey-2: #5b5a56; --grey-3: #3c3c41;
   --teal: #0ac8b9; --hextech: #010a13; --red: #e84057;
+  /* League's whisper colour. */
+  --violet: #c88bf5;
   --serif: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, "Microsoft YaHei UI", "PingFang SC", serif;
   --sans: "Segoe UI Variable Text", "Segoe UI", -apple-system, "Microsoft YaHei UI", "PingFang SC", sans-serif;
   --frame-fill: linear-gradient(#0d2128, #07131a);

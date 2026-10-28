@@ -9,14 +9,18 @@ export type TextInput =
   | { kind: 'ready' }
   /** `name` is everything after the command, trimmed: '' when nobody was named. */
   | { kind: 'mute'; name: string }
+  /** `rest` is everything after /w, trimmed: a member's name, then the message. */
+  | { kind: 'whisper'; rest: string }
+  /** /r: `text` ('' when there is none) goes to the member who whispered us last. */
+  | { kind: 'reply'; text: string }
   | { kind: 'unknown' }
   | { kind: 'empty' };
 
 /**
- * The commands Tab completes, in the order it offers them: the short /ff before its long form. One that takes a name
- * completes with its space, so the next Tab goes on to the names.
+ * The commands Tab completes, in the order it offers them: the short /ff before its long form. One that takes more
+ * completes with its space, so the next Tab goes on to the names, or the message can follow.
  */
-export const COMMANDS: readonly string[] = ['/ff', '/mute ', '/noff', '/ready', '/surrender'];
+export const COMMANDS: readonly string[] = ['/ff', '/mute ', '/noff', '/r ', '/ready', '/surrender', '/w '];
 
 /** Where Tab cycling stands: the text it started from, and which of its matches the box shows. */
 export interface CompletionCycle {
@@ -31,21 +35,24 @@ export function commandMatches(typed: string): string[] {
   return COMMANDS.filter((c) => c.startsWith(prefix));
 }
 
-const MUTE = /^\/mute\s+(.*)$/i;
+/** A command that takes a name, a space, and the start of the name. */
+const NAMED = /^\/(mute|w)\s+(.*)$/i;
 /** `/mute all`: every other member. It wins over a member who is really called "all". */
 export const MUTE_ALL = 'all';
 
 /**
- * What Tab can make of `typed`: a command, or after /mute and a space, `/mute` and `all` or a member's name that starts
- * there, `all` first.
+ * What Tab can make of `typed`: a command, or after /mute or /w and a space, that command and a member's name that
+ * starts there. /mute offers `all` first; /w adds a space after the name, for the message.
  */
 function completions(typed: string, names: readonly string[]): string[] {
-  const mute = MUTE.exec(typed);
-  if (!mute) return commandMatches(typed);
-  const start = mute[1].toLowerCase();
+  const named = NAMED.exec(typed);
+  if (!named) return commandMatches(typed);
+  const start = named[2].toLowerCase();
+  const starts = (n: string): boolean => n.toLowerCase().startsWith(start);
+  if (named[1].toLowerCase() === 'w') return [...new Set(names)].filter(starts).map((n) => `/w ${n} `);
   // A member called "all" can't be named here (the keyword wins), so offering their name would mislead.
   const offered = [MUTE_ALL, ...new Set(names.filter((n) => n.toLowerCase() !== MUTE_ALL))];
-  return offered.filter((n) => n.toLowerCase().startsWith(start)).map((n) => `/mute ${n}`);
+  return offered.filter(starts).map((n) => `/mute ${n}`);
 }
 
 /**
@@ -90,13 +97,36 @@ export function muteToggle(
   return { peers: targets.map((m) => m.peer), on: !targets.every((m) => m.muted), name: all ? null : targets[0].name };
 }
 
-/** Commands start with a slash and match as a whole word; /surrender is the long form of /ff, and /mute takes a name. */
+/**
+ * /w <name> <message>: the other members called by the longest name `rest` starts with, in any case, and the message
+ * after it ('' when there is none). Names can hold spaces, so the longest one that fits wins. Null when no other
+ * member's name starts `rest`.
+ */
+export function whisperTarget(members: readonly RoomMember[], rest: string): { to: RoomMember[]; text: string } | null {
+  const others = members.filter((m) => !m.self);
+  // The name, in any case, and then a space or nothing.
+  const starts = (name: string): boolean =>
+    rest.slice(0, name.length).toLowerCase() === name.toLowerCase() && !/\S/.test(rest.charAt(name.length));
+  const name = others.map((m) => m.name).filter(starts).sort((a, b) => b.length - a.length)[0];
+  if (name === undefined) return null;
+  const wanted = name.toLowerCase();
+  return { to: others.filter((m) => m.name.toLowerCase() === wanted), text: rest.slice(name.length).trim() };
+}
+
+/**
+ * Commands start with a slash and match as a whole word; /surrender is the long form of /ff, /mute takes a name, /w a
+ * name and a message, and /r a message.
+ */
 export function parseTextInput(raw: string): TextInput {
   const text = sanitizeText(raw);
   if (text === '') return { kind: 'empty' };
   if (!text.startsWith('/')) return { kind: 'text', text };
   const mute = /^\/mute(?:\s+(.*))?$/i.exec(text);
   if (mute) return { kind: 'mute', name: (mute[1] ?? '').trim() };
+  const whisper = /^\/w(?:\s+(.*))?$/i.exec(text);
+  if (whisper) return { kind: 'whisper', rest: (whisper[1] ?? '').trim() };
+  const reply = /^\/r(?:\s+(.*))?$/i.exec(text);
+  if (reply) return { kind: 'reply', text: (reply[1] ?? '').trim() };
   switch (text.toLowerCase()) {
     case '/ff':
     case '/surrender':

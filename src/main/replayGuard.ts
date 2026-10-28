@@ -1,6 +1,6 @@
 const WINDOW = 64;
 /** Wide enough for machines whose clocks aren't synced; old enough captures can't be replayed later. */
-const MAX_SKEW_MS = 10 * 60 * 1000;
+export const MAX_SKEW_MS = 10 * 60 * 1000;
 
 export type ReplayVerdict = 'ok' | 'stale' | 'replay' | 'gone';
 

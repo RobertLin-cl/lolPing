@@ -131,8 +131,10 @@ function emptyRow(): HTMLElement {
   return row;
 }
 
-function historyLine(line: HistoryLine): HTMLElement {
+function historyLine(line: HistoryLine, t: Strings): HTMLElement {
   const row = el('div', `line ${line.kind}`);
+  if (line.kind === 'whisperTo') row.append(el('span', 'dir', t.chatWhisperTo));
+  else if (line.kind === 'whisperFrom') row.append(el('span', 'dir', t.chatWhisperFrom));
   if (line.tag) {
     const who = el('span', 'who', line.tag.name);
     who.style.setProperty('--tag', tagColorCss(line.tag.color, line.tag.rgb));
@@ -187,7 +189,7 @@ export function renderRoster(root: HTMLElement, state: PanelState, act: (a: Pane
   } else if (state.history.length === 0) {
     list.append(el('div', 'empty', t.panelHistoryEmpty));
   } else {
-    for (const line of state.history) list.append(historyLine(line));
+    for (const line of state.history) list.append(historyLine(line, t));
   }
   board.append(list);
   root.replaceChildren(cap, board);

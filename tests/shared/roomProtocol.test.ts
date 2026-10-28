@@ -5,8 +5,8 @@ import {
 } from '../../src/shared/roomColors';
 import {
   clampNameInput, decodeMessage, decodeSigned, encodeMessage, joinSigned, splitSigned, isOlderThan, isVoteId, MAX_TEXT, sanitizeName, sanitizeText, validateMessage,
-  type AliveMsg, type BallotMsg, type ChunkMsg, type EmoteMsg, type PingMsg, type PresenceMsg, type RoomMessage, type TextMsg,
-  type VoteMsg, type WantMsg,
+  WHISPER_B64_MAX, type AliveMsg, type BallotMsg, type ChunkMsg, type EmoteMsg, type PingMsg, type PresenceMsg, type RoomMessage,
+  type TextMsg, type VoteMsg, type WantMsg, type WhisperMsg,
 } from '../../src/shared/roomProtocol';
 
 const base = { peer: '0123456789abcdef', seq: 4, ts: 1_780_000_000_000 };
@@ -464,13 +464,47 @@ describe('message signatures', () => {
     for (const bad of [`${'B'.repeat(42)}=`, `${'B'.repeat(43)}!`, 7]) expect(validateMessage({ ...presence, pk: bad })).toEqual(presence);
   });
 
+  it('keeps a well-formed whisper key on a presence and drops a bad one, not the presence', () => {
+    const xk = `${'C'.repeat(43)}=`;
+    expect(validateMessage({ ...presence, xk })).toEqual({ ...presence, xk });
+    for (const bad of [`${'C'.repeat(44)}`, '', null]) expect(validateMessage({ ...presence, xk: bad })).toEqual(presence);
+  });
+
   it('fits the largest signed presence in one packet', () => {
     const worst: PresenceMsg = {
       ...base, seq: Number.MAX_SAFE_INTEGER, t: 'presence', proto: 1, app: '9'.repeat(64), name: '😀'.repeat(16), color: 7,
       rgb: [255, 255, 255], status: 'paused', em: Array.from({ length: 9 }, (_, i) => String(i).repeat(32)),
-      nf: ['text', 'votes'], pk: `${'B'.repeat(43)}=`,
+      nf: ['text', 'votes'], pk: `${'B'.repeat(43)}=`, xk: `${'C'.repeat(43)}=`,
     };
     const sealed = seal(Buffer.alloc(32), bytes(joinSigned(enc(worst), SIG)));
     expect(sealed.length).toBeLessThanOrEqual(MAX_PACKET);
+  });
+});
+
+describe('whisper messages', () => {
+  const whisper: WhisperMsg = { ...base, t: 'whisper', e: `${'D'.repeat(43)}=`, b: 'QUJD'.repeat(40) };
+
+  it('round-trips, and keeps known fields only', () => {
+    expect(decodeMessage(encodeMessage(whisper))).toEqual(whisper);
+    expect(validateMessage({ ...whisper, to: '1111111111111111' })).toEqual(whisper);
+  });
+
+  it('drops a whisper with a malformed key or box', () => {
+    for (const bad of [
+      { ...whisper, e: 'D'.repeat(44) },
+      { ...whisper, e: undefined },
+      { ...whisper, b: 'QUJ' },
+      { ...whisper, b: 'QUJ!' },
+      { ...whisper, b: 'A'.repeat(WHISPER_B64_MAX + 4) },
+      { ...whisper, b: 7 },
+    ]) expect(validateMessage(bad)).toBeNull();
+    expect(validateMessage({ ...whisper, b: 'A'.repeat(WHISPER_B64_MAX) })).not.toBeNull();
+  });
+
+  it('fits the largest box in one packet', () => {
+    // 80 bytes of sender, clock and signature, the longest text at 4 bytes a code point, and the tag.
+    expect(WHISPER_B64_MAX).toBe(Math.ceil((80 + MAX_TEXT * 4 + 16) / 3) * 4);
+    const worst: WhisperMsg = { ...whisper, seq: Number.MAX_SAFE_INTEGER, ts: Number.MAX_SAFE_INTEGER, b: 'A'.repeat(WHISPER_B64_MAX) };
+    expect(seal(Buffer.alloc(32), encodeMessage(worst)).length).toBeLessThanOrEqual(MAX_PACKET);
   });
 });
