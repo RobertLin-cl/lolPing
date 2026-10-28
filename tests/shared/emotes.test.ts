@@ -151,8 +151,17 @@ describe('emoteName', () => {
     expect(emoteName('facepalm', 'zh-CN', [])).toBe('捂脸');
   });
 
-  it('uses the Chinese name for Traditional Chinese too, the only one the catalog has', () => {
-    expect(emoteName('facepalm', 'zh-TW', [])).toBe('捂脸');
+  it('names bundled emotes in Traditional Chinese as the Taiwan client does', () => {
+    expect(emoteName('facepalm', 'zh-TW', [])).toBe('摀臉');
+    expect(emoteName('poro_ride', 'zh-TW', [])).toBe('Let\'s Go！普羅');
+  });
+
+  it('gives every bundled emote its own name in every language', () => {
+    for (const lang of ['en', 'zh-CN', 'zh-TW'] as const) {
+      const names = EMOTE_CATALOG.map((e) => emoteName(e.slug, lang, []));
+      expect(new Set(names).size, lang).toBe(names.length);
+      for (const n of names) expect(n.trim(), lang).not.toBe('');
+    }
   });
 
   it('names a custom emote by its stored name', () => {

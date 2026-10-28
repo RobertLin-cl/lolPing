@@ -70,6 +70,7 @@ py -3.14 -m pip install pillow numpy
 |---|---|---|
 | `hashes.binfields.txt`, `hashes.bintypes.txt`, `hashes.binentries.txt` | `https://raw.githubusercontent.com/CommunityDragon/Data/master/hashes/lol/` | Field names in effect files. Without them, skipped fields show as hashes and most emotes read as "not faithful". |
 | `summoner-emotes.zh_cn.json` | `https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/zh_cn/v1/summoner-emotes.json` | Chinese names (`nameZh`). Download it by hand: `--emotes` stops without it, and the gallery then shows English names with a warning |
+| `summoner-emotes.zh_tw.json` | `https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/zh_tw/v1/summoner-emotes.json` | Traditional Chinese names (`nameTw`), from the Taiwan client. Download it by hand: `--emotes` stops without it |
 | `vgmstream/` | vgmstream release zip (r2117) | Decoding Wwise audio; pass `--vgmstream .cache/vgmstream/vgmstream-cli.exe` |
 
 The English emote list (`summoner-emotes.json`) is read from the client's `default-assets.wad` and cached in `.cache/`. It is read again whenever `default-assets.wad` changes size or modification time (after a client patch), so a stale list is never reused.
@@ -112,7 +113,7 @@ For every entry, `--emotes` writes:
 
 `--glow-opacity <n>` draws the halos behind the emotes at that opacity instead of `GLOW_OPACITY`.
 
-It then deletes every other file in `assets/emotes/` and generates `src/shared/emoteCatalog.ts`. `NAME_OVERRIDES` in `extract_assets.py` (slug → name, nameZh) replaces a catalog name where the client's is not enough; the two Unworthy emotes need it, and the run refuses two emotes with the same name. The output is deterministic: running it again on the same League version writes byte-identical files.
+It then deletes every other file in `assets/emotes/` and generates `src/shared/emoteCatalog.ts`. `NAME_OVERRIDES` in `extract_assets.py` (slug → name, nameZh, nameTw) replaces a catalog name where the client's is not enough; the two Unworthy emotes need it, and the run refuses two emotes with the same name. The output is deterministic: running it again on the same League version writes byte-identical files.
 
 ### Adding an emote later
 

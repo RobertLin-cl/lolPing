@@ -106,10 +106,10 @@ EMOTE_SET: dict[str, int] = {
 DEFAULT_EMOTE_WHEEL: list[str] = ['unworthy_cn', 'poro_snax', 'sad_kitten', 'cheeky_poro', 'angry_kitty', 'gg_heart',
                                   'bee_happy', 'bee_mad']
 DEFAULT_CLICK_EMOTE = 'facepalm'
-# Names for the catalog where the client's are not enough: slug -> (name, nameZh). The client calls both Unworthy emotes
-# "Unworthy" / "弱爆", and the app's settings list emotes by name.
-NAME_OVERRIDES: dict[str, tuple[str, str]] = {
-    'unworthy_cn': ('Unworthy (Chinese text)', '弱爆（文字版）'),
+# Names for the catalog where the client's are not enough: slug -> (name, nameZh, nameTw). The clients call both
+# Unworthy emotes "Unworthy" / "弱爆" / "不值得", and the app's settings list emotes by name.
+NAME_OVERRIDES: dict[str, tuple[str, str, str]] = {
+    'unworthy_cn': ('Unworthy (Chinese text)', '弱爆（文字版）', '不值得（文字版）'),
 }
 
 # output png name -> League .tex in Global.wad.client (the other textures came from Obsidian DDS exports, see README)

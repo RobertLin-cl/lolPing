@@ -1,4 +1,5 @@
 import { EMOTE_CATALOG } from '../../shared/emoteCatalog';
+import { emoteName } from '../../shared/emotes';
 import { LANGUAGE_NAMES, type Lang } from '../../shared/i18n';
 import type { SystemTextLayer } from '../../shared/teammate/contextProtocol';
 import { physicalBoxToOverview, type Shot } from '../../shared/teammate/coords';
@@ -216,8 +217,8 @@ export function systemPrompt(ctx: AskContext): string {
     vocab,
   ];
   if (ctx.emotes) {
-    const zh = ctx.lang !== 'en'; // the catalog's Chinese names, for either script
-    const names = EMOTE_CATALOG.map((e) => `${e.slug} (${e.name}${zh ? `, ${e.nameZh}` : ''})`);
+    const zh = ctx.lang !== 'en';
+    const names = EMOTE_CATALOG.map((e) => `${e.slug} (${e.name}${zh ? `, ${emoteName(e.slug, ctx.lang, [])}` : ''})`);
     lines.push(
       '',
       `Emotes: use at most ${MAX_EMOTES} \`emote\` per answer, and only when it adds tone. Slugs: ${names.join(', ')}.`,

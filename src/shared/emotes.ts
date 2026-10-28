@@ -89,10 +89,12 @@ export function allEmoteAssetFiles(): string[] {
   return EMOTE_CATALOG.flatMap((e) => [`emotes/${e.slug}.webp`, `emotes/${e.slug}.png`, ...(e.hasSound ? [`emotes/${e.slug}.ogg`] : [])]);
 }
 
+/** Where the catalog keeps each language's name for a bundled emote: the League client's own, in that language. */
+const CATALOG_NAME: Record<Lang, 'name' | 'nameZh' | 'nameTw'> = { en: 'name', 'zh-CN': 'nameZh', 'zh-TW': 'nameTw' };
+
 export function emoteName(ref: EmoteRef, lang: Lang, custom: readonly CustomEmote[]): string {
   const bundled = catalogEmote(ref);
-  // The catalog has the client's Simplified Chinese names only, so Traditional Chinese shows those too.
-  if (bundled) return lang === 'en' ? bundled.name : bundled.nameZh;
+  if (bundled) return bundled[CATALOG_NAME[lang]];
   return custom.find((c) => c.id === ref)?.name ?? '?';
 }
 
