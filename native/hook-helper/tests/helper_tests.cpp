@@ -584,16 +584,16 @@ static bool panelShows(const Result& r, bool show) {
 
 static void test_panel_key_shows_on_press_and_hides_on_release() {
   Decision d = withPanel();
-  Result r = d.onEvent(kd(TAB));
-  CHECK(r.swallow && panelShows(r, true) && r.injects.empty());
+  Result r = d.onEvent(kd(TAB));  // the app underneath gets every down, repeat and up
+  CHECK(!r.swallow && panelShows(r, true) && r.injects.empty());
   r = d.onEvent(kd(TAB));  // auto-repeat
-  CHECK(r.swallow && r.emits.empty() && r.injects.empty());
+  CHECK(!r.swallow && r.emits.empty() && r.injects.empty());
   r = d.onEvent(kd(TAB));
-  CHECK(r.swallow && r.emits.empty());
+  CHECK(!r.swallow && r.emits.empty());
   r = d.onEvent(ku(TAB));
-  CHECK(r.swallow && panelShows(r, false) && r.injects.empty());
+  CHECK(!r.swallow && panelShows(r, false) && r.injects.empty());
   r = d.onEvent(kd(TAB));  // the next press shows it again
-  CHECK(r.swallow && panelShows(r, true));
+  CHECK(!r.swallow && panelShows(r, true));
 }
 
 static void test_panel_key_with_modifier_passes() {
@@ -627,13 +627,13 @@ static void test_panel_key_passes_over_fullscreen_game() {
   CHECK(!d.onEvent(ku(TAB)).swallow);
   fullscreen = false;
   r = d.onEvent(kd(TAB));
-  CHECK(r.swallow && panelShows(r, true));
+  CHECK(!r.swallow && panelShows(r, true));
   d.onEvent(ku(TAB));
   c.gameCheck = false;  // gameCheck off: the probe is not asked
   d.setConfig(c);
   fullscreen = true;
   r = d.onEvent(kd(TAB));
-  CHECK(r.swallow && panelShows(r, true));
+  CHECK(!r.swallow && panelShows(r, true));
 }
 
 static void test_panel_key_passes_when_off_or_paused() {
@@ -667,27 +667,27 @@ static void test_panel_key_passes_when_it_is_a_wheel_trigger() {
   CHECK(r.swallow);
 }
 
-static void test_panel_key_up_after_config_change_is_swallowed() {
+static void test_panel_key_up_after_config_change_hides_the_panel() {
   Decision d = withPanel();
-  CHECK(d.onEvent(kd(TAB)).swallow);
+  CHECK(!d.onEvent(kd(TAB)).swallow);
   Config off = d.config();
   off.panelVk = 0;  // left the room, or the feature went off, with Tab still held
   d.setConfig(off);
-  Result r = d.onEvent(kd(TAB));  // repeats were never seen by the OS either
-  CHECK(r.swallow && r.emits.empty());
+  Result r = d.onEvent(kd(TAB));  // repeats keep reaching the app
+  CHECK(!r.swallow && r.emits.empty());
   r = d.onEvent(ku(TAB));
-  CHECK(r.swallow && panelShows(r, false));
-  r = d.onEvent(kd(TAB));  // and the next Tab is ordinary again
+  CHECK(!r.swallow && panelShows(r, false));
+  r = d.onEvent(kd(TAB));  // and the next Tab shows nothing
   CHECK(!r.swallow && findEmit(r, Emit::Kind::Panel) == nullptr);
   CHECK(!d.onEvent(ku(TAB)).swallow);
 }
 
-static void test_panel_key_up_while_paused_is_swallowed() {
+static void test_panel_key_up_while_paused_hides_the_panel() {
   Decision d = withPanel();
   d.onEvent(kd(TAB));
   d.setSuspended(true);
   Result r = d.onEvent(ku(TAB));
-  CHECK(r.swallow && panelShows(r, false));
+  CHECK(!r.swallow && panelShows(r, false));
 }
 
 static void test_panel_hides_when_repeats_stop() {
@@ -699,10 +699,10 @@ static void test_panel_hides_when_repeats_stop() {
   Result r = d.tick(1600);
   CHECK(panelShows(r, false));
   CHECK(d.tick(3000).emits.empty());  // hidden once
-  r = d.onEvent(ku(TAB));  // the real up still never reaches the OS
-  CHECK(r.swallow && r.emits.empty());
+  r = d.onEvent(ku(TAB));  // the real up, if it still comes, reaches the app like the down did
+  CHECK(!r.swallow && r.emits.empty());
   r = d.onEvent(kd(TAB));
-  CHECK(r.swallow && panelShows(r, true));
+  CHECK(!r.swallow && panelShows(r, true));
 }
 
 static void test_panel_stays_shown_while_another_key_is_pressed() {
@@ -740,7 +740,7 @@ static void test_panel_with_no_repeat_watchdog_stays_shown_through_a_long_hold()
   CHECK(d.tick(60000).emits.empty());
   CHECK(d.tick(600000).emits.empty());
   Result r = d.onEvent(ku(TAB));
-  CHECK(r.swallow && panelShows(r, false));
+  CHECK(!r.swallow && panelShows(r, false));
 }
 
 static void test_panel_repeat_gap_is_a_setting() {
@@ -753,7 +753,7 @@ static void test_panel_repeat_gap_is_a_setting() {
   CHECK(panelShows(d.tick(3100), false));
 }
 
-static void test_release_panel_hides_it_and_keeps_the_up_swallowed() {
+static void test_release_panel_hides_it_and_lets_the_up_pass() {
   Decision d = withPanel();
   CHECK(d.releasePanel().emits.empty());  // nothing shown: nothing to do
   d.onEvent(kd(TAB));
@@ -761,9 +761,9 @@ static void test_release_panel_hides_it_and_keeps_the_up_swallowed() {
   CHECK(panelShows(r, false));
   CHECK(d.releasePanel().emits.empty());
   r = d.onEvent(ku(TAB));
-  CHECK(r.swallow && r.emits.empty());
+  CHECK(!r.swallow && r.emits.empty());
   r = d.onEvent(kd(TAB));
-  CHECK(r.swallow && panelShows(r, true));
+  CHECK(!r.swallow && panelShows(r, true));
 }
 
 static void test_text_hotkey_ignored_while_paused() {
@@ -1984,14 +1984,14 @@ int main() {
   test_panel_key_passes_over_fullscreen_game();
   test_panel_key_passes_when_off_or_paused();
   test_panel_key_passes_when_it_is_a_wheel_trigger();
-  test_panel_key_up_after_config_change_is_swallowed();
-  test_panel_key_up_while_paused_is_swallowed();
+  test_panel_key_up_after_config_change_hides_the_panel();
+  test_panel_key_up_while_paused_hides_the_panel();
   test_panel_hides_when_repeats_stop();
   test_panel_stays_shown_while_another_key_is_pressed();
   test_panel_repeats_keep_it_shown();
   test_panel_with_no_repeat_watchdog_stays_shown_through_a_long_hold();
   test_panel_repeat_gap_is_a_setting();
-  test_release_panel_hides_it_and_keeps_the_up_swallowed();
+  test_release_panel_hides_it_and_lets_the_up_pass();
   test_text_hotkey_ignored_while_paused();
   test_disabling_mid_drag_cancels_and_swallows_up();
   test_config_change_mid_drag_cancels();

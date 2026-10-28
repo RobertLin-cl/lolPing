@@ -52,7 +52,7 @@ struct Config {
   // The room keys are live only once a config turns them on (0 = off), so nothing is captured before the first config.
   uint32_t textMods = ModCtrl | ModAlt;
   uint32_t textVk = 0;
-  uint32_t panelVk = 0;  // held to show the room panel; captured with no modifier, never replayed
+  uint32_t panelVk = 0;  // held with no modifier to show the room panel; the app underneath still gets it
   bool enabled = true;
 };
 
@@ -86,7 +86,7 @@ struct Result {
 
 constexpr uint32_t kMaskVk = 0xFC;  // VK_NONAME: harmless key that stops Alt/Win menu activation
 constexpr uint64_t kWatchdogMs = 10000;
-// A held key repeats well inside this; a captured panel key that goes quiet for longer has lost its key-up.
+// A held key repeats well inside this; a held panel key that goes quiet for longer has lost its key-up.
 constexpr uint64_t kPanelRepeatGapMs = 1500;
 // Each press and release of a double tap, and the gap between the taps, must fit in this.
 constexpr uint64_t kDoubleTapMs = 350;
@@ -108,10 +108,10 @@ class Decision {
   // Windows opens the menu bar / Start menu on a lone Alt / Win key-up, so a swallowed press while one is held
   // gets a mask key before that key-up. macOS has no such behaviour: its hook layer turns this off.
   void setMaskMenuKeys(bool on) { maskMenuKeys_ = on; }
-  // How long a captured panel key may go without a repeat before the panel hides itself (a lost key-up).
+  // How long a held panel key may go without a repeat before the panel hides itself (a lost key-up).
   // 0 = no watchdog, for platforms where repeats are not a reliable sign that the key is still down.
   void setPanelRepeatGap(uint64_t ms) { panelRepeatGapMs_ = ms; }
-  // Hides the panel without a key-up (the OS stopped telling us about keys). The up, if it comes, stays swallowed.
+  // Hides the panel without a key-up (the OS stopped telling us about keys).
   Result releasePanel();
   // Scroll events are reported only while this is on (the teammate has marks on screen). It never touches a
   // gesture, which is why it is not a config field.
@@ -195,7 +195,7 @@ class Decision {
   int px_ = 0;
   int py_ = 0;
   uint64_t lastMouseMs_ = 0;
-  // The panel key we swallowed and have not seen come up (0 = none), and when it last repeated.
+  // The panel key we saw go down and have not seen come up (0 = none), and when it last repeated.
   uint32_t panelDown_ = 0;
   uint64_t lastPanelMs_ = 0;
   uint64_t panelRepeatGapMs_ = kPanelRepeatGapMs;

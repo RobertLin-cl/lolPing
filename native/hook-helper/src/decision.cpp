@@ -273,8 +273,7 @@ Result Decision::releasePanel() {
 
 Result Decision::tick(uint64_t nowMs) {
   Result r;
-  // A captured panel key whose repeats stopped lost its key-up: hide the panel. The real up, if it still
-  // comes, stays swallowed through swallowKeyUps_, and the key counts as up for the next press.
+  // A held panel key whose repeats stopped lost its key-up: hide the panel. The key counts as up for the next press.
   if (panelDown_ != 0 && panelRepeatGapMs_ != 0 && nowMs > lastPanelMs_ && nowMs - lastPanelMs_ > panelRepeatGapMs_)
     r = releasePanel();
   const bool busy = state_ == State::Pending || state_ == State::Wheel;
@@ -395,17 +394,14 @@ void Decision::onKeyDown(const InputEvent& e, Result& r) {
     }
     return;
   }
-  // The room panel key: a deliberate exception to "input passes through" (spec 5.3). Plain key, captured at
-  // once and never replayed. Its repeats stay swallowed even if the config changed since, because the OS never saw the down.
+  // The room panel key is only watched: the app underneath still gets every down, repeat and up.
   if (panelDown_ != 0 && vk == panelDown_) {
-    r.swallow = true;
     lastPanelMs_ = e.timeMs;
     return;
   }
   if (active() && !repeat && cfg_.panelVk != 0 && vk == cfg_.panelVk && mods() == 0 && !isAnyTriggerVk(vk) &&
       !(cfg_.gameCheck && fullscreenProbe_ && fullscreenProbe_(lastX_, lastY_))) {
-    r.swallow = true;
-    swallowKeyUps_.insert(vk);
+    swallowKeyUps_.erase(vk);
     panelDown_ = vk;
     lastPanelMs_ = e.timeMs;
     r.emits.push_back(panelEmit(true));

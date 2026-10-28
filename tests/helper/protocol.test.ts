@@ -161,14 +161,14 @@ describe('hook-helper --simulate', () => {
     expect(keyLines.every((e) => e.type === 'sim' && e.swallow)).toBe(true);
   });
 
-  it('shows the panel on Tab down, hides it on Tab up, and swallows both', async () => {
+  it('shows the panel on Tab down, hides it on Tab up, and lets both through', async () => {
     const events = await simulate([
       { ...config, panelVk: 9 }, sim('kdown', { vk: 9 }), sim('kup', { vk: 9 }),
     ]);
     const protocol = events.filter((e) => e.type !== 'ready');
     expect(protocol).toEqual([
-      { type: 'panel', show: true }, { type: 'sim', swallow: true, inject: '' },
-      { type: 'panel', show: false }, { type: 'sim', swallow: true, inject: '' },
+      { type: 'panel', show: true }, { type: 'sim', swallow: false, inject: '' },
+      { type: 'panel', show: false }, { type: 'sim', swallow: false, inject: '' },
     ]);
   });
 
