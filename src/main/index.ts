@@ -698,7 +698,10 @@ function start(): void {
           for (const peer of toggle.peers) room.muteMember(peer, toggle.on);
           // A note in our own log only: nobody else hears about it, as with the mute button.
           const t = text();
-          history.push({ at: Date.now(), kind: 'note', tag: null, text: toggle.on ? t.chatMuted(toggle.name) : t.chatUnmuted(toggle.name) });
+          const note = toggle.name === null
+            ? (toggle.on ? t.chatMutedAll : t.chatUnmutedAll)
+            : (toggle.on ? t.chatMuted(toggle.name) : t.chatUnmuted(toggle.name));
+          history.push({ at: Date.now(), kind: 'note', tag: null, text: note });
           return 'sent';
         }
         default:

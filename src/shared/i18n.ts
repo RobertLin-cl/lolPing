@@ -790,6 +790,8 @@ const en = {
   textBoxNoMember: 'No one in the room by that name',
   chatMuted: (name: string) => `You muted ${name}`,
   chatUnmuted: (name: string) => `You unmuted ${name}`,
+  chatMutedAll: 'You muted everyone in the room',
+  chatUnmutedAll: 'You unmuted everyone in the room',
   textBoxVotesOff: 'Votes are off',
 
   // room votes
@@ -1559,6 +1561,8 @@ const zh: Strings = {
   textBoxNoMember: '房间里没有这个名字的人',
   chatMuted: (name) => `已将 ${name} 静音`,
   chatUnmuted: (name) => `已取消 ${name} 的静音`,
+  chatMutedAll: '已将房间里所有人静音',
+  chatUnmutedAll: '已取消房间里所有人的静音',
   textBoxVotesOff: '投票已关闭',
 
   votesOff: '投票已关闭',

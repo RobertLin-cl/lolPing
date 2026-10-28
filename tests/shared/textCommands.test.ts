@@ -111,33 +111,41 @@ describe('/mute', () => {
     expect(parseTextInput('/muted')).toEqual({ kind: 'unknown' });
   });
 
-  it('completes /m to /mute and a space, and the next Tab goes on to the names', () => {
+  it('completes /m to /mute and a space, and the next Tab goes on to all and the names', () => {
     const names = ['Alex', 'Garen'];
     const command = completeCommand('/m', null, false, names);
     expect(command?.value).toBe('/mute ');
-    const name = command && completeCommand(command.value, command.cycle, false, names);
-    expect(name?.value).toBe('/mute Alex');
-    expect(name && completeCommand(name.value, name.cycle, false, names)?.value).toBe('/mute Garen');
+    const first = command && completeCommand(command.value, command.cycle, false, names);
+    expect(first?.value).toBe('/mute all');
+    expect(first && completeCommand(first.value, first.cycle, false, names)?.value).toBe('/mute Alex');
   });
 
   it('keeps a lone completion as it is on further presses', () => {
-    const step = completeCommand('/mute ', null, false, ['Alex']);
+    const step = completeCommand('/mute ale', null, false, ['Alex']);
     expect(step?.value).toBe('/mute Alex');
     expect(step && completeCommand(step.value, step.cycle, false, ['Alex'])?.value).toBe('/mute Alex');
   });
 
-  it('cycles through the names after /mute, only those that start with what was typed', () => {
+  it('cycles through all and then the names after /mute, only those that start with what was typed', () => {
     const names = ['Ahri 小队长', 'Alex', 'Garen'];
     let step = completeCommand('/mute ', null, false, names);
     const seen: string[] = [];
-    for (let i = 0; i < 4 && step; i++) {
+    for (let i = 0; i < 5 && step; i++) {
       seen.push(step.value);
       step = completeCommand(step.value, step.cycle, false, names);
     }
-    expect(seen).toEqual(['/mute Ahri 小队长', '/mute Alex', '/mute Garen', '/mute Ahri 小队长']);
-    expect(completeCommand('/mute al', null, false, names)?.value).toBe('/mute Alex');
+    expect(seen).toEqual(['/mute all', '/mute Ahri 小队长', '/mute Alex', '/mute Garen', '/mute all']);
+    const al = completeCommand('/mute al', null, false, names);
+    expect(al?.value).toBe('/mute all');
+    expect(al && completeCommand(al.value, al.cycle, false, names)?.value).toBe('/mute Alex');
     expect(completeCommand('/mute x', null, false, names)).toBeNull();
-    expect(completeCommand('/mute ', null, false, [])).toBeNull();
+    expect(completeCommand('/mute ', null, false, [])?.value).toBe('/mute all');
+  });
+
+  it('leaves a member called "all" out of the names, since /mute all means everyone', () => {
+    const step = completeCommand('/mute a', null, false, ['ALL', 'Alex']);
+    expect(step?.value).toBe('/mute all');
+    expect(step && completeCommand(step.value, step.cycle, false, ['ALL', 'Alex'])?.value).toBe('/mute Alex');
   });
 
   it('offers a name two members share once', () => {
@@ -154,6 +162,18 @@ describe('/mute', () => {
 
   it('unmutes a member who is muted already, as League does', () => {
     expect(muteToggle(members, 'Garen')).toEqual({ peers: ['c'], on: false, name: 'Garen' });
+  });
+
+  it('mutes every other member with all, in any case, and unmutes them once every one of them is muted', () => {
+    expect(muteToggle(members, 'all')).toEqual({ peers: ['a', 'b', 'c'], on: true, name: null });
+    expect(muteToggle(members, 'ALL')?.on).toBe(true);
+    const allMuted = members.map((m) => ({ ...m, muted: !m.self }));
+    expect(muteToggle(allMuted, 'all')).toEqual({ peers: ['a', 'b', 'c'], on: false, name: null });
+    expect(muteToggle([members[0]], 'all')).toBeNull(); // alone in the room
+  });
+
+  it('takes all as everyone even when a member is called that', () => {
+    expect(muteToggle([...members, member('d', 'All')], 'all')?.peers).toEqual(['a', 'b', 'c', 'd']);
   });
 
   it('treats members who share a name alike: muted unless every one of them already is', () => {

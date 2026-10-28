@@ -32,13 +32,20 @@ export function commandMatches(typed: string): string[] {
 }
 
 const MUTE = /^\/mute\s+(.*)$/i;
+/** `/mute all`: every other member. It wins over a member who is really called "all". */
+export const MUTE_ALL = 'all';
 
-/** What Tab can make of `typed`: a command, or after /mute and a space, `/mute` and a member's name that starts there. */
+/**
+ * What Tab can make of `typed`: a command, or after /mute and a space, `/mute` and `all` or a member's name that starts
+ * there, `all` first.
+ */
 function completions(typed: string, names: readonly string[]): string[] {
   const mute = MUTE.exec(typed);
   if (!mute) return commandMatches(typed);
   const start = mute[1].toLowerCase();
-  return [...new Set(names)].filter((n) => n.toLowerCase().startsWith(start)).map((n) => `/mute ${n}`);
+  // A member called "all" can't be named here (the keyword wins), so offering their name would mislead.
+  const offered = [MUTE_ALL, ...new Set(names.filter((n) => n.toLowerCase() !== MUTE_ALL))];
+  return offered.filter((n) => n.toLowerCase().startsWith(start)).map((n) => `/mute ${n}`);
 }
 
 /**
@@ -69,13 +76,18 @@ export function completeCommand(
 
 /**
  * /mute <name>: the other members with that name, in any case, and whether they end up muted. It toggles, as in League:
- * muted unless every one of them already is. Null when nobody but us has that name.
+ * muted unless every one of them already is. `/mute all` takes every other member, and its `name` is null. Null when
+ * nobody but us has that name, or for all when we are alone.
  */
-export function muteToggle(members: readonly RoomMember[], name: string): { peers: string[]; on: boolean; name: string } | null {
+export function muteToggle(
+  members: readonly RoomMember[],
+  name: string,
+): { peers: string[]; on: boolean; name: string | null } | null {
   const wanted = name.toLowerCase();
-  const targets = members.filter((m) => !m.self && m.name.toLowerCase() === wanted);
+  const all = wanted === MUTE_ALL;
+  const targets = members.filter((m) => !m.self && (all || m.name.toLowerCase() === wanted));
   if (wanted === '' || targets.length === 0) return null;
-  return { peers: targets.map((m) => m.peer), on: !targets.every((m) => m.muted), name: targets[0].name };
+  return { peers: targets.map((m) => m.peer), on: !targets.every((m) => m.muted), name: all ? null : targets[0].name };
 }
 
 /** Commands start with a slash and match as a whole word; /surrender is the long form of /ff, and /mute takes a name. */
