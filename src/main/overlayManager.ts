@@ -7,12 +7,13 @@ import {
 import { WHEEL, pickSlice } from '../shared/geometry';
 import { isPingId, type PingId } from '../shared/pings';
 import type { HelperEvent, WheelKind } from '../shared/protocol';
-import type { OverlaySettings, OverlayTextStyle } from '../shared/settings';
+import { emoteSizeFor, type OverlaySettings, type OverlayTextStyle } from '../shared/settings';
 import type { Rect } from '../shared/teammate/coords';
 import {
   displayAtPhysical, physicalBoxToLocal, physicalToDip, physicalToLocal, type DisplayMap, type LocalPoint,
 } from './coords';
 import { numberDisplays, type NumberedDisplay } from './displayNumbers';
+import { edgeCopies, emoteExtent, pingExtent } from './edgeCopies';
 import { IS_LINUX, IS_MAC, loadPage, preloadPath } from './paths';
 
 /** A ping the user just placed, in overlay-local CSS px: the room shares these. */
@@ -49,6 +50,13 @@ export interface AskClick {
 }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+
+/** A ping or emote message without its spot, which differs on each display it is drawn on. */
+type PingOrder = Omit<OverlayEvents['ping:spawn'], 'x' | 'y'>;
+type EmoteOrder = Omit<OverlayEvents['emote:spawn'], 'x' | 'y'>;
+
+/** A copy's size, left out when it is the usual one. */
+const sized = (scale: number): { scale?: number } => (scale === 1 ? {} : { scale });
 
 /**
  * Where a display's overlay window goes. Windows takes a shown window that covers a whole display for a full-screen app:
@@ -126,7 +134,8 @@ export class OverlayManager extends EventEmitter {
       const displayId = this.displayOf(event.sender);
       if (displayId === undefined) return;
       this.emit('shared', { id: p.id, displayId, x: p.x, y: p.y } satisfies SharedPing);
-      this.unkeepElsewhere(displayId); // the wheel's own overlay already swapped its kept ping for this one
+      // The wheel's own overlay already drew it, swapping its kept ping for this one.
+      this.unkeepElsewhere(this.copyPing({ displayId, x: p.x, y: p.y }, { id: p.id, ...this.ownKeep() }));
     });
     ipcMain.on(OVERLAY_EMOTED, (event, raw: unknown) => {
       const p = raw as { ref?: unknown; x?: unknown; y?: unknown } | null;
@@ -135,7 +144,8 @@ export class OverlayManager extends EventEmitter {
       if (displayId === undefined) return;
       this.emit('sharedEmote', { ref: p.ref, displayId, x: p.x, y: p.y } satisfies SharedEmote);
       // The wheel's own overlay already shows it. Another display may still hold an earlier one of ours.
-      this.clearElsewhere(displayId, 'self');
+      const on = this.copyEmote({ displayId, x: p.x, y: p.y }, { owner: 'self', art: this.resolveArt(p.ref, false) });
+      this.clearElsewhere(on, 'self');
     });
     ipcMain.on(OVERLAY_IDLE, (event, idle: unknown) => {
       // Screenshot tools on Windows take a shown overlay for a window over the whole display (#127): park an empty one.
@@ -208,8 +218,7 @@ export class OverlayManager extends EventEmitter {
         }
         if (ev.wheel === 'emote') {
           const ref = this.settings.clickEmoteId;
-          this.send(p.displayId, 'emote:spawn', { owner: 'self', art: this.resolveArt(ref, false), x: p.x, y: p.y });
-          this.clearElsewhere(p.displayId, 'self');
+          this.clearElsewhere(this.spawnEmote(p, { owner: 'self', art: this.resolveArt(ref, false) }), 'self');
           this.emit('sharedEmote', { ref, displayId: p.displayId, x: p.x, y: p.y } satisfies SharedEmote);
           break;
         }
@@ -237,7 +246,8 @@ export class OverlayManager extends EventEmitter {
 
   /** A room member's ping, already mapped onto one of our displays. */
   spawnRemote(p: { displayId: number; x: number; y: number; id: PingId; tag: PingTag }): void {
-    this.send(p.displayId, 'ping:spawn', { id: p.id, x: p.x, y: p.y, tag: p.tag });
+    const { id, tag, ...at } = p;
+    this.spawnPing(at, { id, tag });
   }
 
   /** The ask now running. The teammate's marks sent after this carry it, so an overlay drops any from an older ask. */
@@ -254,19 +264,20 @@ export class OverlayManager extends EventEmitter {
     displayId: number; x: number; y: number; id: PingId; label?: string; thinking?: boolean;
     silent?: boolean; keep?: boolean; tagOnly?: boolean; tag: PingTag;
   }): void {
-    const { displayId, ...ping } = p;
+    const { displayId, x, y, ...ping } = p;
     const ticket = this.mateTicket === null ? {} : { ticket: this.mateTicket };
-    this.send(displayId, 'ping:spawn', { ...ping, owner: MATE, ...ticket });
+    this.spawnPing({ displayId, x, y }, { ...ping, owner: MATE, ...ticket });
   }
 
   /** The teammate's emote (a bundled slug), replacing its earlier one on any display. `keep`: as in spawnMate. */
   spawnMateEmote(p: { displayId: number; x: number; y: number; slug: string; keep?: boolean; tag: PingTag }): void {
     const ticket = this.mateTicket === null ? {} : { ticket: this.mateTicket };
     const keep = p.keep ? { keep: true } : {};
-    this.send(p.displayId, 'emote:spawn', {
-      owner: MATE, art: { kind: 'bundled', slug: p.slug }, x: p.x, y: p.y, tag: p.tag, ...keep, ...ticket,
-    });
-    this.clearElsewhere(p.displayId, MATE);
+    const on = this.spawnEmote(
+      { displayId: p.displayId, x: p.x, y: p.y },
+      { owner: MATE, art: { kind: 'bundled', slug: p.slug }, tag: p.tag, ...keep, ...ticket },
+    );
+    this.clearElsewhere(on, MATE);
   }
 
   /** Removes the teammate's pings and emotes on every display at once. */
@@ -334,8 +345,8 @@ export class OverlayManager extends EventEmitter {
     // The effect is the sender's choice, so the one on their message wins — over a cached still's plain pop, and over
     // the effect we picked if we happen to have the same image imported.
     const withFx = art.kind === 'custom' ? { ...art, fx: p.fx ?? 0 } : art;
-    this.send(p.displayId, 'emote:spawn', { owner: p.peer, art: withFx, x: p.x, y: p.y, tag: p.tag });
-    this.clearElsewhere(p.displayId, p.peer);
+    const on = this.spawnEmote({ displayId: p.displayId, x: p.x, y: p.y }, { owner: p.peer, art: withFx, tag: p.tag });
+    this.clearElsewhere(on, p.peer);
   }
 
   /** A line of room text (ours, with no tag, or a member's), already mapped onto one of our displays. */
@@ -374,10 +385,45 @@ export class OverlayManager extends EventEmitter {
 
   /** Our own ping placed from here, kept if that setting is on, and shared with the room. */
   private placeOwnPing(id: PingId, p: LocalPoint): void {
-    const keep = this.settings.keepLastPing ? { keep: true } : {};
-    this.send(p.displayId, 'ping:spawn', { id, x: p.x, y: p.y, ...keep });
-    this.unkeepElsewhere(p.displayId);
+    this.unkeepElsewhere(this.spawnPing(p, { id, ...this.ownKeep() }));
     this.emit('shared', { id, displayId: p.displayId, x: p.x, y: p.y } satisfies SharedPing);
+  }
+
+  private ownKeep(): { keep?: boolean } {
+    return this.settings.keepLastPing ? { keep: true } : {};
+  }
+
+  /** Shows a ping on its display and copies it onto the displays it reaches into. Returns every display it is on. */
+  private spawnPing(at: LocalPoint, ping: PingOrder): number[] {
+    this.send(at.displayId, 'ping:spawn', { ...ping, x: at.x, y: at.y });
+    return this.copyPing(at, ping);
+  }
+
+  /**
+   * Each overlay clips at its own display's edges, so a ping near an edge another display shares is drawn there too,
+   * silently: one ping, one sound. Returns every display the ping is on, its own first.
+   */
+  private copyPing(at: LocalPoint, ping: PingOrder): number[] {
+    const copies = edgeCopies(at, pingExtent(this.settings.pingSizePx), this.maps);
+    for (const c of copies) {
+      this.send(c.displayId, 'ping:spawn', { ...ping, x: c.x, y: c.y, silent: true, ...sized(c.scale) });
+    }
+    return [at.displayId, ...copies.map((c) => c.displayId)];
+  }
+
+  /** Shows an emote on its display and copies it onto the displays it reaches into. Returns every display it is on. */
+  private spawnEmote(at: LocalPoint, emote: EmoteOrder): number[] {
+    this.send(at.displayId, 'emote:spawn', { ...emote, x: at.x, y: at.y });
+    return this.copyEmote(at, emote);
+  }
+
+  /** As copyPing, for an emote. The copies have its owner, so the owner's next emote replaces them too. */
+  private copyEmote(at: LocalPoint, emote: EmoteOrder): number[] {
+    const copies = edgeCopies(at, emoteExtent(emoteSizeFor(emote.art, this.settings)), this.maps);
+    for (const c of copies) {
+      this.send(c.displayId, 'emote:spawn', { ...emote, x: c.x, y: c.y, silent: true, ...sized(c.scale) });
+    }
+    return [at.displayId, ...copies.map((c) => c.displayId)];
   }
 
   /** The slice is worked out here from the same geometry the wheel draws, so the overlay has nothing to report. */
@@ -393,6 +439,7 @@ export class OverlayManager extends EventEmitter {
       return;
     }
     const { displayId, x, y } = open.local;
+    this.copyPing(open.local, { id }); // the wheel's overlay drew the ping at the wheel centre
     this.emit('askRelease', { displayId, x, y, phys: open.phys, id } satisfies AskRelease);
   }
 
@@ -419,15 +466,15 @@ export class OverlayManager extends EventEmitter {
     if (moved) this.rebuild();
   }
 
-  /** We keep one ping on screen: drop it on every display but the one that just showed our new one. */
-  private unkeepElsewhere(displayId: number): void {
+  /** We keep one ping on screen: drop it on every display but those that just showed our new one. */
+  private unkeepElsewhere(on: readonly number[]): void {
     if (!this.settings.keepLastPing) return;
-    for (const id of this.windows.keys()) if (id !== displayId) this.send(id, 'ping:unkeep', null);
+    for (const id of this.windows.keys()) if (!on.includes(id)) this.send(id, 'ping:unkeep', null);
   }
 
-  /** Each owner has one emote on screen: clear theirs on every display but the one that just showed their new one. */
-  private clearElsewhere(displayId: number, owner: string): void {
-    for (const id of this.windows.keys()) if (id !== displayId) this.send(id, 'emote:clear', { owner });
+  /** Each owner has one emote on screen: clear theirs on every display but those that just showed their new one. */
+  private clearElsewhere(on: readonly number[], owner: string): void {
+    for (const id of this.windows.keys()) if (!on.includes(id)) this.send(id, 'emote:clear', { owner });
   }
 
   private rebuild(): void {

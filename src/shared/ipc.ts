@@ -32,15 +32,21 @@ export interface OverlayEvents {
   'wheel:move': Point & { wheel?: WheelKind };
   'wheel:release': Point & { wheel?: WheelKind };
   'wheel:cancel': null;
-  /** `tag` marks a ping from another room member. `keep`: our own ping that stays until 'ping:unkeep' or our next one. */
-  'ping:spawn': Point & { id: PingId; tag?: PingTag; keep?: boolean } & MateMark;
+  /**
+   * `tag` marks a ping from another room member. `keep`: our own ping that stays until 'ping:unkeep' or our next one.
+   * `scale`: drawn this many times its usual size, for a copy that must match a ping on a display with another scale.
+   */
+  'ping:spawn': Point & { id: PingId; tag?: PingTag; keep?: boolean; scale?: number } & MateMark;
   /** Removes the ping kept on this display, if any: we pinged on another display, or paused. */
   'ping:unkeep': null;
   /**
    * `owner` is 'self', 'preview' or a room member: each owner has at most one emote on screen.
    * `keep`: the teammate's emote stays until mate:clear or mate:fade.
+   * `silent` and `scale`: a copy of an emote placed on a neighbouring display, with no sound and its size on screen.
    */
-  'emote:spawn': Point & { owner: string; art: EmoteArt; tag?: PingTag; ticket?: string; keep?: boolean };
+  'emote:spawn': Point & {
+    owner: string; art: EmoteArt; tag?: PingTag; ticket?: string; keep?: boolean; silent?: boolean; scale?: number;
+  };
   'emote:clear': { owner: string };
   'toast:show': { title: string; body: string };
   /** `owner` is 'self' or a room member: each owner has at most 3 lines on screen. */
@@ -76,7 +82,7 @@ export interface MateMark {
   label?: string;
   /** Animated dots on the tag until the teammate says something. */
   thinking?: boolean;
-  /** No sound: every ping of a set but the first, and the receipt when its sound is off. */
+  /** No sound: every ping of a set but the first, the receipt when its sound is off, and a copy on a second display. */
   silent?: boolean;
   /** Only the name tag, no ping art: the receipt for a Do it ask, whose On My Way the user already placed. */
   tagOnly?: boolean;

@@ -82,16 +82,18 @@ function applySettings(s: OverlaySettings): void {
 }
 applySettings(settings);
 
-function ping(def: PingDef, x: number, y: number, tag?: PingTag, keep = false, mate: MateMark = {}): void {
-  const { owner, label, thinking, tagOnly } = mate;
+function ping(
+  def: PingDef, x: number, y: number, tag?: PingTag, keep = false, mark: MateMark & { scale?: number } = {},
+): void {
+  const { owner, label, thinking, tagOnly, scale = 1 } = mark;
   // The teammate's kept receipt goes with mate:clear or mate:fade; it never replaces the user's own kept ping.
   const ours = keep && owner !== 'mate';
   if (ours) dropKeptPing();
   const el = spawnPing(pingLayer, def, x, y, {
-    sizePx: settings.pingSizePx, durationS: settings.pingDurationS, tag, keep, owner, label, thinking, tagOnly,
+    sizePx: settings.pingSizePx * scale, durationS: settings.pingDurationS, tag, keep, owner, label, thinking, tagOnly,
   });
   if (ours) keptPing = el;
-  if (!mate.silent) sounds.play(def.sound, volume());
+  if (!mark.silent) sounds.play(def.sound, volume());
 }
 
 /** The ask that is running. A teammate mark stamped with another one is from a cancelled ask: drop it. */
@@ -126,9 +128,12 @@ function dressWheel(ask: boolean): void {
   pingWheel.setCenterLabel(ask ? tag.name : null);
 }
 
-function emote(owner: string, art: EmoteArt, x: number, y: number, tag?: PingTag, keep = false): void {
-  stage.spawn(owner, art, x, y, { sizePx: emoteSizeFor(art, settings), tag, keep });
-  if (!settings.emoteSound) return;
+function emote(
+  owner: string, art: EmoteArt, x: number, y: number, tag?: PingTag, keep = false,
+  copy: { silent?: boolean; scale?: number } = {},
+): void {
+  stage.spawn(owner, art, x, y, { sizePx: emoteSizeFor(art, settings) * (copy.scale ?? 1), tag, keep });
+  if (!settings.emoteSound || copy.silent) return;
   if (art.kind === 'bundled' && catalogEmote(art.slug)?.hasSound) sounds.play(`emote:${art.slug}`, volume());
   if (art.kind === 'custom' && art.sound) void sounds.playUrl(art.sound, volume());
 }
@@ -168,7 +173,7 @@ window.overlay.on('ping:spawn', (p) => {
 window.overlay.on('ping:unkeep', dropKeptPing);
 window.overlay.on('emote:spawn', (p) => {
   if (p.owner === 'mate' && staleMate(p)) return;
-  emote(p.owner, p.art, p.x, p.y, p.tag, p.keep === true);
+  emote(p.owner, p.art, p.x, p.y, p.tag, p.keep === true, p);
 });
 window.overlay.on('emote:clear', (p) => stage.clear(p.owner));
 window.overlay.on('toast:show', (t) => showToast(toastLayer, t.title, t.body));

@@ -297,12 +297,12 @@ describe('OverlayManager ask wheel', () => {
 
   it('draws the teammate\'s pings and emotes with its tag, and clears or fades them everywhere', () => {
     const tag = { name: 'AI', color: 3 };
-    mgr.spawnMate({ displayId: 2, x: 10, y: 20, id: 'danger', label: 'typo', silent: true, tag });
+    mgr.spawnMate({ displayId: 2, x: 600, y: 400, id: 'danger', label: 'typo', silent: true, tag });
     mgr.spawnMateEmote({ displayId: 1, x: 5, y: 6, slug: 'okay', tag });
     mgr.clearMate();
     mgr.fadeMate();
     expect(sent(1)).toEqual([
-      ['ping:spawn', { id: 'danger', x: 10, y: 20, owner: 'mate', label: 'typo', silent: true, tag }],
+      ['ping:spawn', { id: 'danger', x: 600, y: 400, owner: 'mate', label: 'typo', silent: true, tag }],
       ['emote:clear', { owner: 'mate' }],
       ['mate:clear', null],
       ['mate:fade', null],
@@ -386,8 +386,8 @@ describe('OverlayManager emote reports from the overlay', () => {
   it('shares a wheel emote from the display that placed it and clears ours elsewhere', () => {
     const shared = vi.fn();
     mgr.on('sharedEmote', shared);
-    h.handlers.get(OVERLAY_EMOTED)!({ sender: sender(1) }, { ref: 'c:' + 'a'.repeat(32), x: 10, y: 20 });
-    expect(shared).toHaveBeenCalledWith({ ref: 'c:' + 'a'.repeat(32), displayId: 2, x: 10, y: 20 });
+    h.handlers.get(OVERLAY_EMOTED)!({ sender: sender(1) }, { ref: 'c:' + 'a'.repeat(32), x: 600, y: 400 });
+    expect(shared).toHaveBeenCalledWith({ ref: 'c:' + 'a'.repeat(32), displayId: 2, x: 600, y: 400 });
     expect(sent(0)).toEqual([['emote:clear', { owner: 'self' }]]);
     expect(sent(1)).toEqual([]);
   });
@@ -426,7 +426,7 @@ describe('OverlayManager kept ping', () => {
 
   it('drops the kept ping on the other displays when a wheel ping is reported', () => {
     keepOn();
-    h.handlers.get(OVERLAY_PINGED)!({ sender: h.windows[1].webContents }, { id: 'danger', x: 1, y: 2 });
+    h.handlers.get(OVERLAY_PINGED)!({ sender: h.windows[1].webContents }, { id: 'danger', x: 600, y: 400 });
     expect(sent(0)).toEqual([['ping:unkeep', null]]);
     expect(sent(1)).toEqual([]);
   });
@@ -443,18 +443,18 @@ describe('OverlayManager kept ping', () => {
 
   it('never keeps a room member’s ping or a preview', () => {
     keepOn();
-    mgr.spawnRemote({ displayId: 2, x: 1, y: 1, id: 'danger', tag: { name: 'Bot', color: 0 } });
+    mgr.spawnRemote({ displayId: 2, x: 600, y: 400, id: 'danger', tag: { name: 'Bot', color: 0 } });
     mgr.previewPing('danger');
-    expect(sent(1)).toEqual([['ping:spawn', { id: 'danger', x: 1, y: 1, tag: { name: 'Bot', color: 0 } }]]);
+    expect(sent(1)).toEqual([['ping:spawn', { id: 'danger', x: 600, y: 400, tag: { name: 'Bot', color: 0 } }]]);
     expect(sent(0)).toEqual([['ping:spawn', { id: 'danger', x: 960, y: 540 }]]);
   });
 });
 
 describe('OverlayManager remote and preview emotes', () => {
   it('shows a room member\'s emote on the target display with their tag, and clears theirs on the others', () => {
-    mgr.spawnRemoteEmote({ displayId: 2, x: 5, y: 6, ref: 'gg_heart', peer: 'peer-1', tag: { name: 'Bob', color: 2 } });
+    mgr.spawnRemoteEmote({ displayId: 2, x: 600, y: 400, ref: 'gg_heart', peer: 'peer-1', tag: { name: 'Bob', color: 2 } });
     expect(resolveArt).toHaveBeenCalledWith('gg_heart', true);
-    expect(sent(1)).toEqual([['emote:spawn', { owner: 'peer-1', art: art('gg_heart', true), x: 5, y: 6, tag: { name: 'Bob', color: 2 } }]]);
+    expect(sent(1)).toEqual([['emote:spawn', { owner: 'peer-1', art: art('gg_heart', true), x: 600, y: 400, tag: { name: 'Bob', color: 2 } }]]);
     expect(sent(0)).toEqual([['emote:clear', { owner: 'peer-1' }]]);
   });
 
@@ -477,6 +477,71 @@ describe('OverlayManager remote and preview emotes', () => {
     expect(sent(0)).toEqual([['emote:spawn', { owner: 'preview', art: art('nice', false), x: 960, y: 540 }]]);
     expect(sent(1)).toEqual([]);
     expect(shared).not.toHaveBeenCalled();
+  });
+});
+
+describe('OverlayManager marks on a shared edge', () => {
+  const sender = (i: number): unknown => h.windows[i].webContents;
+  const tag = { name: 'Bob', color: 2 };
+
+  it('draws a ping by the edge on the next display too, at the same spot on screen and silent, and shares it once', () => {
+    const shared = vi.fn();
+    mgr.on('shared', shared);
+    mgr.handle({ type: 'click', x: 1915, y: 400, wheel: 'ping' });
+    expect(sent(0)).toEqual([['ping:spawn', { id: DEFAULT_SETTINGS.clickPingId, x: 1915, y: 400 }]]);
+    expect(sent(1)).toEqual([['ping:spawn', { id: DEFAULT_SETTINGS.clickPingId, x: -5, y: 400, silent: true }]]);
+    expect(shared).toHaveBeenCalledExactlyOnceWith({ id: DEFAULT_SETTINGS.clickPingId, displayId: 1, x: 1915, y: 400 });
+  });
+
+  it('keeps the kept ping’s copy, and drops it once our next ping lands away from the edge', () => {
+    mgr.updateSettings(overlaySettings({ ...DEFAULT_SETTINGS, keepLastPing: true }));
+    mgr.handle({ type: 'click', x: 1915, y: 400, wheel: 'ping' });
+    expect(sent(1)).toEqual([['ping:spawn', { id: DEFAULT_SETTINGS.clickPingId, x: -5, y: 400, keep: true, silent: true }]]);
+    mgr.handle({ type: 'click', x: 500, y: 400, wheel: 'ping' });
+    expect(sent(1).at(-1)).toEqual(['ping:unkeep', null]);
+  });
+
+  it('copies a wheel ping or emote the overlay drew itself, without drawing it twice or clearing the copy', () => {
+    h.handlers.get(OVERLAY_PINGED)!({ sender: sender(0) }, { id: 'danger', x: 1915, y: 400 });
+    h.handlers.get(OVERLAY_EMOTED)!({ sender: sender(0) }, { ref: 'okay', x: 1915, y: 400 });
+    expect(sent(0)).toEqual([]);
+    expect(sent(1)).toEqual([
+      ['ping:spawn', { id: 'danger', x: -5, y: 400, silent: true }],
+      ['emote:spawn', { owner: 'self', art: art('okay', false), x: -5, y: 400, silent: true }],
+    ]);
+  });
+
+  it('gives a room member’s emote copy their owner, so their next emote elsewhere clears it', () => {
+    mgr.spawnRemoteEmote({ displayId: 2, x: 10, y: 400, ref: 'gg_heart', peer: 'peer-1', tag });
+    expect(sent(0)).toEqual([
+      ['emote:spawn', { owner: 'peer-1', art: art('gg_heart', true), x: 1930, y: 400, tag, silent: true }],
+    ]);
+    mgr.spawnRemoteEmote({ displayId: 2, x: 600, y: 400, ref: 'gg_heart', peer: 'peer-1', tag });
+    expect(sent(0).at(-1)).toEqual(['emote:clear', { owner: 'peer-1' }]);
+  });
+
+  it('draws the copy larger on a display with a smaller scale, so both parts match on screen', () => {
+    h.displays[1].scaleFactor = 2;
+    mgr.spawnRemote({ displayId: 2, x: 4, y: 100, id: 'danger', tag });
+    expect(sent(0)).toEqual([['ping:spawn', { id: 'danger', tag, x: 1928, y: 200, silent: true, scale: 2 }]]);
+  });
+
+  it('copies the ask ping the wheel drew at its centre', () => {
+    mgr.updateSettings(overlaySettings({
+      ...DEFAULT_SETTINGS, features: { ...DEFAULT_SETTINGS.features, teammate: true },
+    }));
+    mgr.handle({ type: 'wheelOpen', x: 1915, y: 500, wheel: 'ask' });
+    mgr.handle({ type: 'wheelRelease', x: 1915, y: 360, wheel: 'ask' });
+    expect(sent(1)).toEqual([['ping:spawn', { id: 'danger', x: -5, y: 500, silent: true }]]);
+  });
+
+  it('copies the teammate’s pings with its owner and ticket, so clearing and stale asks reach the copies', () => {
+    mgr.setMateTicket('t1');
+    mgr.spawnMate({ displayId: 1, x: 1915, y: 400, id: 'push', tag });
+    expect(sent(1)).toEqual([
+      ['mate:ticket', { id: 't1' }],
+      ['ping:spawn', { id: 'push', x: -5, y: 400, owner: 'mate', tag, ticket: 't1', silent: true }],
+    ]);
   });
 });
 
@@ -593,7 +658,7 @@ describe('OverlayManager z-order', () => {
 
   it('puts the overlay back on top on Windows before it shows a wheel, a ping, an emote or a toast', () => {
     mgr.handle({ type: 'wheelOpen', x: 100, y: 200, wheel: 'ping' });
-    mgr.spawnRemote({ displayId: 2, x: 1, y: 1, id: 'danger', tag: { name: 'Bot', color: 0 } });
+    mgr.spawnRemote({ displayId: 2, x: 600, y: 400, id: 'danger', tag: { name: 'Bot', color: 0 } });
     mgr.previewEmote('okay');
     mgr.toast('t', 'b');
     expect(raised()).toEqual([['screen-saver', 'screen-saver', 'screen-saver'], ['screen-saver']]);
