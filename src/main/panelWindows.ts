@@ -25,8 +25,15 @@ interface Slot {
 const emptySlot = (): Slot => ({ win: null, loaded: false, state: null, shown: false });
 
 /**
+ * Windows: the vote widget is an ordinary window, so Alt+Tab and the taskbar switch to it and away from it. A new vote
+ * shows it over the window in front without taking the keyboard, but it isn't kept on top: the next app the user
+ * switches to covers it. Clicking it takes the keyboard. On macOS and Linux it stays a panel that never takes focus.
+ */
+export const switchable = (view: View): boolean => view === 'vote' && !IS_MAC && !IS_LINUX;
+
+/**
  * The roster and the vote widget: two small windows that take clicks without taking focus, so the game or editor
- * underneath keeps the keyboard. Each is created when first shown and kept hidden after that.
+ * underneath keeps the keyboard (but see `switchable`). Each is created when first shown and kept hidden after that.
  * Emits 'action' with a validated PanelAction.
  */
 export class PanelWindows extends EventEmitter {
@@ -81,7 +88,8 @@ export class PanelWindows extends EventEmitter {
     w.setBounds(rect);
     if (!slot.loaded) return; // 'did-finish-load' sends the state and shows the window
     this.push(slot);
-    this.reveal(w);
+    // A switchable card redraws its new ballots and result where it is: only a new vote brings it back to the front.
+    if (!switchable(view) || !w.isVisible()) this.reveal(view, w);
   }
 
   private hide(view: View): void {
@@ -90,6 +98,7 @@ export class PanelWindows extends EventEmitter {
     if (!slot.win || slot.win.isDestroyed()) return;
     // The window is reused: clear what it drew, so the next show can't flash this vote's card before its own.
     if (view === 'vote' && slot.state) slot.win.webContents.send(PANEL_CH.state, { ...slot.state, vote: null, voteOver: false });
+    if (switchable(view)) slot.win.flashFrame(false);
     slot.win.hide();
   }
 
@@ -97,13 +106,19 @@ export class PanelWindows extends EventEmitter {
     if (slot.win && !slot.win.isDestroyed() && slot.loaded && slot.state) slot.win.webContents.send(PANEL_CH.state, slot.state);
   }
 
-  private reveal(w: BrowserWindow): void {
+  private reveal(view: View, w: BrowserWindow): void {
     // Windows can drop an always-on-top window behind normal ones after a while (#70): set the level again each time.
     w.setAlwaysOnTop(true, 'screen-saver');
     w.showInactive();
+    if (!switchable(view)) return;
+    // Letting go of the top leaves it above every ordinary window, the one in front included, until the user switches.
+    w.setAlwaysOnTop(false);
+    // A game that keeps itself on top would hide it at once: the taskbar button blinks until the card is in front.
+    w.flashFrame(true);
   }
 
   private create(view: View, slot: Slot, rect: Rect): BrowserWindow {
+    const ordinary = switchable(view);
     const w = new BrowserWindow({
       ...rect,
       frame: false,
@@ -114,19 +129,20 @@ export class PanelWindows extends EventEmitter {
       minimizable: false,
       maximizable: false,
       fullscreenable: false,
-      skipTaskbar: true,
-      alwaysOnTop: true,
-      // Clicks reach the page, but the window never becomes the active one: whatever the user was typing into keeps the keyboard.
-      focusable: false,
+      skipTaskbar: !ordinary,
+      alwaysOnTop: !ordinary,
+      // Clicks reach the page, but a panel never becomes the active window: whatever the user was typing into keeps the keyboard.
+      focusable: ordinary,
       show: false,
       // macOS: a non-activating panel is what keeps the active app unchanged. Not checked on a Mac yet.
       ...(IS_MAC ? { type: 'panel' as const } : {}),
-      webPreferences: { preload: preloadPath('panel'), spellcheck: false },
+      // A covered card keeps its countdown, ring and sound fades in time with the vote.
+      webPreferences: { preload: preloadPath('panel'), spellcheck: false, backgroundThrottling: !ordinary },
     });
     slot.win = w;
     slot.loaded = false;
     w.setIgnoreMouseEvents(false);
-    w.setAlwaysOnTop(true, 'screen-saver'); // above the overlay and a game's borderless window
+    if (!ordinary) w.setAlwaysOnTop(true, 'screen-saver'); // above the overlay and a game's borderless window
     if (IS_LINUX) w.setVisibleOnAllWorkspaces(true);
     if (IS_MAC) w.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
     w.on('closed', () => {
@@ -136,7 +152,7 @@ export class PanelWindows extends EventEmitter {
       slot.loaded = true;
       if (!slot.shown) return;
       this.push(slot);
-      this.reveal(w);
+      this.reveal(view, w);
     });
     const drop = (): void => {
       if (!w.isDestroyed()) w.destroy();
