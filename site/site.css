@@ -41,8 +41,7 @@ body {
   pointer-events: none;
   z-index: 50;
 }
-#fx #pings,
-#fx #emotes {
+#fx #pings {
   position: absolute;
 }
 #wheel,

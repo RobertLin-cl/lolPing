@@ -27,16 +27,14 @@ const toastLayer = document.getElementById('toasts') as HTMLElement;
 const textLayer = document.getElementById('texts') as HTMLElement;
 const pingSvg = document.getElementById('wheel') as unknown as SVGSVGElement;
 
-// The emote wheel is a second copy of the ping wheel's svg, and its emotes get a layer of their own above the pings.
+// The emote wheel is a second copy of the ping wheel's svg.
 const emoteSvg = pingSvg.cloneNode(false) as SVGSVGElement;
 emoteSvg.id = 'emoteWheel';
 pingSvg.after(emoteSvg);
-const emoteLayer = document.createElement('div');
-emoteLayer.id = 'emotes';
-pingLayer.after(emoteLayer);
 
 const sounds = new SoundBank();
-const stage = new EmoteStage(emoteLayer);
+// Emotes share the pings' layer, so whichever was sent last is drawn on top.
+const stage = new EmoteStage(pingLayer);
 const texts = new TextStage(textLayer);
 const glows = new GlowStage(pingLayer);
 let settings: OverlaySettings = overlaySettings(DEFAULT_SETTINGS);
@@ -190,7 +188,7 @@ window.overlay.on('mate:glow', (raw) => {
 });
 
 // Every ping, emote, line, glow and toast lives in one of these layers, and the wheels are drawn while open.
-const layers = [pingLayer, emoteLayer, textLayer, toastLayer];
+const layers = [pingLayer, textLayer, toastLayer];
 const idle = new IdleWatch(
   () => !pingWheel.isOpen && !emoteWheel.isOpen && layers.every((l) => l.childElementCount === 0),
   (v) => window.overlay.reportIdle(v),
