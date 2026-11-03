@@ -25,7 +25,7 @@ describe('statusTip', () => {
   it('writes every flag on its own line, in the chosen language', () => {
     expect(statusTip(['on'], strings('en'))).toBe('In the room');
     expect(statusTip(['noChat', 'paused'], strings('en'))).toBe('Can’t see text and votes\nPaused');
-    expect(statusTip(['textOff'], strings('zh-CN'))).toBe('文字已关闭');
+    expect(statusTip(['textOff'], strings('zh-CN'))).toBe('聊天已关闭');
   });
 });
 
