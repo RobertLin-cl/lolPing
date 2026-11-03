@@ -1,8 +1,9 @@
 import { EventEmitter } from 'node:events';
 import { describe, expect, it } from 'vitest';
 import { RoomHistory } from '../../src/main/roomHistory';
-import { postLine, startRoomText, type RoomTextDeps } from '../../src/main/roomText';
+import { postLine, postPing, startRoomText, type RoomPingTextDeps, type RoomTextDeps } from '../../src/main/roomText';
 import type { RemoteText, RemoteWhisper } from '../../src/main/roomManager';
+import { ALL_PINGS } from '../../src/shared/pings';
 import { strings } from '../../src/shared/i18n';
 import type { RoomMember } from '../../src/shared/room';
 
@@ -126,5 +127,71 @@ describe('postLine', () => {
     postLine(deps, { kind: 'vote', owner: 'vote', tag: null, displayId: 3, x: 5, y: 6, text: 'Everyone is ready' });
     expect(shown).toEqual([{ displayId: 3, x: 5, y: 6, text: 'Everyone is ready', owner: 'vote' }]);
     expect(history.lines()).toEqual([{ at: 1234, kind: 'vote', tag: null, text: 'Everyone is ready' }]);
+  });
+});
+
+describe('postPing', () => {
+  function setupPing(over: Partial<RoomPingTextDeps> = {}) {
+    const history = new RoomHistory();
+    const shown: number[] = [];
+    const deps: RoomPingTextDeps = {
+      history, now: () => 1234, text: () => strings('en'), enabled: () => true, style: () => 'window',
+      show: () => shown.push(history.lines().length), ...over,
+    };
+    return { deps, history, shown };
+  }
+  const own = { name: 'Sam', color: 0, rgb: null };
+  const remote = { name: 'Alex', color: 2, rgb: [10, 20, 30] as const };
+
+  it('records our own pings and other members pings with their tags before showing chat', () => {
+    const { deps, history, shown } = setupPing();
+    postPing(deps, 'danger', own);
+    postPing(deps, 'omw', remote);
+    expect(history.lines()).toEqual([
+      { at: 1234, kind: 'ping', tag: own, text: 'signals to retreat' },
+      { at: 1234, kind: 'ping', tag: remote, text: 'is on the way' },
+    ]);
+    expect(shown).toEqual([1, 2]);
+  });
+
+  it('records every non-generic ping in each UI language', () => {
+    for (const lang of ['en', 'zh-CN', 'zh-TW'] as const) {
+      const { deps, history } = setupPing({ text: () => strings(lang) });
+      for (const ping of ALL_PINGS) postPing(deps, ping.id, remote);
+      expect(history.lines()).toHaveLength(11);
+      expect(history.lines().every((line) => line.kind === 'ping' && line.text.length > 0)).toBe(true);
+      expect(history.lines().at(-1)?.text).toBe(lang === 'en' ? 'signals ¿' : lang === 'zh-CN' ? '发出了 ¿' : '發出了 ¿');
+    }
+  });
+
+  it('uses the local language for the sentence', () => {
+    const { deps, history } = setupPing({ text: () => strings('zh-TW') });
+    postPing(deps, 'danger', remote);
+    postPing(deps, 'assist', own);
+    expect(history.lines().map((line) => line.text)).toEqual(['發出信號請求撤退', '要求隊友盡速支援']);
+  });
+
+  it('records pings without popping chat for spot and scrolling text styles', () => {
+    for (const style of ['spot', 'danmaku'] as const) {
+      const { deps, history, shown } = setupPing({ style: () => style });
+      postPing(deps, 'missing', own);
+      expect(history.lines()).toHaveLength(1);
+      expect(shown).toEqual([]);
+    }
+  });
+
+  it('does not record generic pings or show chat for them', () => {
+    const { deps, history, shown } = setupPing();
+    postPing(deps, 'generic', own);
+    expect(history.lines()).toEqual([]);
+    expect(shown).toEqual([]);
+  });
+
+  it('does not record or show pings when room chat is not active', () => {
+    const { deps, history, shown } = setupPing({ enabled: () => false });
+    postPing(deps, 'danger', own);
+    postPing(deps, 'missing', remote);
+    expect(history.lines()).toEqual([]);
+    expect(shown).toEqual([]);
   });
 });

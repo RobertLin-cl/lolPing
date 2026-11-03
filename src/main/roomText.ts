@@ -1,4 +1,6 @@
 import type { Strings } from '../shared/i18n';
+import type { PingId } from '../shared/pings';
+import type { RoomTextStyle } from '../shared/settings';
 import type { PingTag } from '../shared/ipc';
 import type { MemberTag, RemoteText, RemoteWhisper, RoomManager } from './roomManager';
 import type { HistoryLine } from '../shared/roomHistory';
@@ -58,4 +60,21 @@ export function startRoomText(deps: RoomTextDeps): () => void {
     deps.room.off('remoteText', onText);
     deps.room.off('whisper', onWhisper);
   };
+}
+
+export interface RoomPingTextDeps {
+  history: RoomHistory;
+  text(): Strings;
+  now(): number;
+  enabled(): boolean;
+  style(): RoomTextStyle;
+  show(): void;
+}
+
+/** Keeps a room ping as League's sentence; only the window style brings up chat. */
+export function postPing(deps: RoomPingTextDeps, id: PingId, tag: MemberTag): void {
+  if (id === 'generic' || !deps.enabled()) return;
+  const { name, color, rgb } = tag;
+  deps.history.push({ at: deps.now(), kind: 'ping', tag: { name, color, rgb }, text: deps.text().pingLines[id] });
+  if (deps.style() === 'window') deps.show();
 }

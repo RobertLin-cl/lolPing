@@ -39,6 +39,7 @@ function showLines(lines: readonly HistoryLine[]): void {
   const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 8;
   log.replaceChildren(...lines.map((line) => {
     const item = document.createElement('li');
+    item.className = line.kind;
     const time = document.createElement('span');
     time.className = 'time';
     time.textContent = `${historyTime(line.at)} `;
@@ -51,7 +52,7 @@ function showLines(lines: readonly HistoryLine[]): void {
     const name = document.createElement('span');
     name.className = 'name';
     name.style.color = tagColorCss(line.tag.color, line.tag.rgb);
-    name.textContent = `${line.tag.name}: `;
+    name.textContent = `${line.tag.name}${line.kind === 'ping' ? ' ' : ': '}`;
     if (line.kind === 'whisperTo' || line.kind === 'whisperFrom') {
       item.className = 'whisper';
       const dir = document.createElement('span');

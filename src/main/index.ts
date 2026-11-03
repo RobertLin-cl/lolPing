@@ -49,7 +49,7 @@ import { RoomHistory } from './roomHistory';
 import { PanelHold } from './panelHold';
 import { PanelWindows } from './panelWindows';
 import { MAX_MEMBERS, RoomManager, type RoomToast } from './roomManager';
-import { postLine, startRoomText, type RoomTextDeps } from './roomText';
+import { postLine, postPing, startRoomText, type RoomPingTextDeps, type RoomTextDeps } from './roomText';
 import { RoomVotes, voteResultLine } from './roomVotes';
 import { registerSettingsIpc } from './settingsIpc';
 import { SettingsStore } from './settingsStore';
@@ -471,11 +471,6 @@ function start(): void {
     if (next.text !== live.text || next.panel !== live.panel) sendConfig();
   });
   overlays.on('displays', pushRoom);
-  room.on('remotePing', (p) => overlays.spawnRemote(p));
-  overlays.on('shared', (p: SharedPing) => {
-    const shared = toShared(overlays.numbered(), p.displayId, p.x, p.y);
-    if (shared) room.sendPing(p.id, shared);
-  });
   room.on('remoteEmote', (p) => {
     if (featureOn(settings, 'emotes')) overlays.spawnRemoteEmote(p);
   });
@@ -500,6 +495,21 @@ function start(): void {
     history,
     now: Date.now,
   };
+  const pingTextDeps: RoomPingTextDeps = {
+    history, text, now: Date.now,
+    enabled: () => enabled && room.state().phase === 'active' && featureOn(settings, 'roomText'),
+    style: () => settings.roomTextStyle,
+    show: showChat,
+  };
+  room.on('remotePing', (p) => {
+    overlays.spawnRemote(p);
+    postPing(pingTextDeps, p.id, p.tag);
+  });
+  overlays.on('shared', (p: SharedPing) => {
+    const shared = toShared(overlays.numbered(), p.displayId, p.x, p.y);
+    if (shared) room.sendPing(p.id, shared);
+    postPing(pingTextDeps, p.id, ownTag());
+  });
   /** The member /r answers: the last one who whispered us, as in League. */
   let replyTo: string | null = null;
   const whispered = (peer: string): void => {
