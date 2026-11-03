@@ -47,6 +47,8 @@ import {
 } from './paths';
 import { deriveRoomKeys } from './roomCrypto';
 import { RoomHistory } from './roomHistory';
+import { DEFAULT_SUMMONER_STATE } from '../shared/summonerSpells';
+import { summonerText } from '../shared/summonerText';
 import { SummonerSession } from './summonerSession';
 import { PanelHold } from './panelHold';
 import { PanelWindows } from './panelWindows';
@@ -571,6 +573,14 @@ function start(): void {
       case 'ballot':
         roomVotes?.answer(a.yes);
         break;
+      case 'spell':
+        sendOwnSpell(a.peer, a.slot, screen.getCursorScreenPoint());
+        break;
+      case 'clearSpell':
+        if (a.peer === room.self && PLATFORM === 'win' && featureOn(settings, 'roomSpells') && summoners.clear(a.slot)) {
+          room.setSummoners(summoners.state());
+        }
+        break;
       case 'alive':
         // The cursor, as the text box does: the page's own screen point is not in DIPs on every display setup.
         sendOwnAlive(a.peer, screen.getCursorScreenPoint());
@@ -721,6 +731,16 @@ function start(): void {
     const { shared, ...spot } = ownSpot(at);
     postLine(lineDeps, { kind: 'alive', owner: 'self', tag: ownTag(), ...spot, text: text().aliveLine(who.name) });
     if (shared) room.sendAlive(peer, shared);
+  };
+  const sendOwnSpell = (peer: string, slot: 'd' | 'f', at: { x: number; y: number }): void => {
+    const state = room.state();
+    const who = state.members.find((m) => m.peer === peer);
+    if (state.phase !== 'active' || !who || !featureOn(settings, 'roomText')) return;
+    const cooldown = (who.spells ?? DEFAULT_SUMMONER_STATE)[slot];
+    const { shared, ...spot } = ownSpot(at);
+    postLine(lineDeps, { kind: 'spell', owner: 'self', tag: ownTag(), ...spot,
+      text: summonerText(text(), cooldown, Date.now(), who.name, peer === room.self) });
+    if (shared) room.sendSpell(peer, slot, cooldown, shared);
   };
   /** Whispers `message` to these members (several when they share the name) and logs it once, in our window only. */
   const sendWhisper = (to: readonly RoomMember[], message: string): TextAnswer => {

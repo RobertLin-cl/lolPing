@@ -77,6 +77,11 @@ export interface SummonerSpellSelection {
 export type SummonerSpellSlot = keyof SummonerSpellSelection;
 export type SummonerState = Readonly<Record<SummonerSpellSlot, SpellCooldown>>;
 
+/** Old peers and members with casting off still have League's default ready pair in the panel. */
+export const DEFAULT_SUMMONER_STATE: SummonerState = {
+  d: createSpellCooldown('heal'), f: createSpellCooldown('flash'),
+};
+
 /** Picking the other slot's spell swaps the pair, so a selection never introduces a duplicate. */
 export function selectSummonerSpell(
   selection: SummonerSpellSelection, slot: SummonerSpellSlot, spell: SummonerSpellId,

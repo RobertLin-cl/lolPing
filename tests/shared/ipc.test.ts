@@ -15,6 +15,14 @@ describe('parsePanelAction', () => {
     }
   });
 
+  it('accepts only known spell slots and peers and ignores renderer snapshots', () => {
+    for (const t of ['spell', 'clearSpell']) {
+      expect(parsePanelAction({ t, peer, slot: 'f', cooldown: {} })).toEqual({ t, peer, slot: 'f' });
+      for (const slot of ['F', 'x', null, 1]) expect(parsePanelAction({ t, peer, slot })).toBeNull();
+      expect(parsePanelAction({ t, peer: 'bad', slot: 'd' })).toBeNull();
+    }
+  });
+
   it('accepts only well-formed panel actions', () => {
     expect(parsePanelAction({ t: 'alive', peer })).toEqual({ t: 'alive', peer });
     expect(parsePanelAction({ t: 'mute', peer, on: true })).toEqual({ t: 'mute', peer, on: true });

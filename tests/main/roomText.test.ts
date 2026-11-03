@@ -3,6 +3,8 @@ import { EventEmitter } from 'node:events';
 import { describe, expect, it } from 'vitest';
 import { RoomHistory } from '../../src/main/roomHistory';
 import { postLine, postPing, startRoomText, type RoomPingTextDeps, type RoomTextDeps } from '../../src/main/roomText';
+import { castSpell, createSpellCooldown } from '../../src/shared/summonerSpells';
+import type { RemoteSpell } from '../../src/main/roomManager';
 import type { RemoteText, RemoteWhisper } from '../../src/main/roomManager';
 import { ALL_PINGS } from '../../src/shared/pings';
 import { strings } from '../../src/shared/i18n';
@@ -77,6 +79,22 @@ describe('startRoomText', () => {
     const { room, shown } = setup();
     room.emit('remoteText', spoken({ kind: 'alive', text: undefined, who: 'me' }));
     expect(shown[0].text).toBe('Sam - Alive');
+  });
+
+  it('formats a spell snapshot at click time and records it under scoreboard without popping hidden chat', () => {
+    const { room, history, visibility, shown, stop } = setup('en', { ...DEFAULT_CHAT_FILTER, scoreboard: false });
+    const click: RemoteSpell = { at: 55000, peer: 'alex', who: 'kim', slot: 'f',
+      cooldown: castSpell(createSpellCooldown('flash'), 0).cooldown,
+      tag: { name: 'Alex', color: 2, rgb: null }, displayId: 7, x: 100, y: 50 };
+    room.emit('remoteSpell', click);
+    expect(shown[0].text).toBe('Wait For Kim Flash - 245s');
+    expect(history.lines()[0]).toMatchObject({ kind: 'spell', tag: { name: 'Alex' } });
+    expect(visibility).toEqual([false]);
+    room.emit('remoteSpell', { ...click, who: 'stranger' });
+    expect(history.lines()).toHaveLength(1);
+    stop();
+    room.emit('remoteSpell', click);
+    expect(history.lines()).toHaveLength(1);
   });
 
   it('drops an alive line for a member we do not know', () => {

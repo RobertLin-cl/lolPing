@@ -1,4 +1,6 @@
 import { historyVisible, type ChatFilter } from '../shared/chatFilter';
+import { summonerText } from '../shared/summonerText';
+import type { RemoteSpell } from './roomManager';
 import type { Strings } from '../shared/i18n';
 import type { PingId } from '../shared/pings';
 import type { RoomTextStyle } from '../shared/settings';
@@ -58,9 +60,17 @@ export function startRoomText(deps: RoomTextDeps): () => void {
     const who = deps.room.state().members.find((m) => m.peer === p.who);
     if (who) postLine(deps, { ...common, kind: 'alive', text: deps.text().aliveLine(who.name) });
   };
+  const onSpell = (p: RemoteSpell): void => {
+    const who = deps.room.state().members.find((m) => m.peer === p.who);
+    if (!who) return;
+    postLine(deps, { kind: 'spell', owner: p.peer, tag: p.tag, displayId: p.displayId, x: p.x, y: p.y,
+      text: summonerText(deps.text(), p.cooldown, p.at, who.name, p.who === p.peer) });
+  };
+  deps.room.on('remoteSpell', onSpell);
   deps.room.on('remoteText', onText);
   deps.room.on('whisper', onWhisper);
   return () => {
+    deps.room.off('remoteSpell', onSpell);
     deps.room.off('remoteText', onText);
     deps.room.off('whisper', onWhisper);
   };

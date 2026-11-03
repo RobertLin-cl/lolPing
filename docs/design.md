@@ -438,7 +438,7 @@ panel feature is not required. Both slots open one shared League-style icon grid
 checkmark and their D/F key. Picking the other slot's spell swaps D and F in one settings update
 (`selectSummonerSpell`); picking the current spell leaves the pair unchanged. Options also grey out while paused
 or after helper failure, and the sound row greys out under global mute. Mute room does not grey local spell choices or sounds. English, Simplified Chinese and Traditional Chinese names come from
-CommunityDragon. Panel display and sound playback are added separately.
+CommunityDragon. Cast sound playback is added separately.
 
 Windows enables passive summoner key support in its hook layer; macOS and Linux never enable it. The helper's
 version 8 config adds `summonerKeys`, set only while the feature is on in an active room and lolPing is enabled.
@@ -450,7 +450,7 @@ text input suspends gestures, so typing can cast too. Main ignores casts during 
 `src/main/summonerSession.ts` applies accepted events to the shared cooldown logic with injected time.
 The local state is kept in memory: leave, feature off, room change, spell change and app restart reset
 both slots. Pausing input and restarting the helper keep cooldowns. Room mute does not stop local casts.
-Casting emits no chat line and has no visible panel or sound effect yet.
+Casting emits no chat line. The panel shows its cooldown; cast sound playback is not wired yet.
 
 Signed presence now carries optional `spells` with both slot IDs, charge recharge end times and Smite's cast-gap
 end time. `RoomManager.setSummoners` updates our own room state and announces a changed immutable snapshot.
@@ -466,10 +466,27 @@ Expired timestamps remain valid. Members retain the latest presence sequence for
 packet cannot undo a cast or a reset. Missing data is the old-peer/default-ready fallback for the panel.
 
 A `spell` message carries the clicked member, slot, cooldown snapshot and target location. It is signed and
-passes the same member, pause, mute, location and rate gates as an alive line. The panel/chat handler is added
-in the next segment. Old decoders ignore both the extra presence field and the unknown spell-click type, so
+passes the same member, pause, mute, location and rate gates as an alive line. The receiver writes the sentence
+from that snapshot at the sender's click timestamp, so transit time does not change the reported seconds. Old decoders ignore both the extra presence field and the unknown spell-click type, so
 `PROTOCOL_VERSION` stays 1. Signed worst-case presence still fits the 1200-byte sealed packet limit.
 No new host is contacted; spell state uses the room's existing encrypted LAN and relay transports.
+
+The panel puts D/F spell buttons beside every name, including ready Heal/Flash for missing peer data. Both
+scoreboard columns keep equal widths and long names ellipsize before the controls. `panel/summoners.ts` updates
+the clock sweep and rounded-up seconds with one local animation frame loop. Hidden panels and the History tab
+stop the loop; showing the panel catches up from end times without new network ticks. Smite shows its charge
+count, its 15-second cast gap first, then the next charge's remaining recharge time.
+
+A left click sends only the member and slot through validated IPC; main reads the current snapshot itself and
+posts a `spell` history line. `summonerText.ts` uses the original League ready, cooldown, ally-wait and charge
+sentences in each viewer's language. Both chat and panel draw these lines in `#C1FFAF` and apply the shared
+Scoreboard filter; hidden reports remain recorded and cannot pop chat. Posting needs room text, not local
+casting, so macOS/Linux and peers with casting off can still report other members' spells.
+
+Right-click sends a separate clear request and does not post a line. Main checks the own peer ID, Windows
+platform and enabled spell feature, then clears only that local slot and announces the new presence. Clearing
+Smite restores both charges and its cast gap; the other slot is preserved. The renderer never supplies a
+cooldown snapshot to be trusted by main.
 
 ### Whispers (this fork)
 

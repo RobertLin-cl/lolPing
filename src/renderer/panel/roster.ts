@@ -4,6 +4,7 @@ import type { PanelAction, PanelState } from '../../shared/ipc';
 import type { RoomMember } from '../../shared/room';
 import { historyTime, type HistoryLine } from '../../shared/roomHistory';
 import { tagColorCss } from '../../shared/roomColors';
+import { animateSummoners, renderSummoners, type SummonerButtons } from './summoners';
 import { el } from './vote';
 
 export type MemberFlag = keyof Strings['panelStatus'];
@@ -62,6 +63,8 @@ const FLAG_GLYPH: Record<MemberFlag, string> = {
 type Tab = 'members' | 'history';
 /** The tab stays as it was left, so the panel opens where the player last looked. */
 let tab: Tab = 'members';
+let stopSpells: (() => void) | null = null;
+export function dropRoster(): void { stopSpells?.(); stopSpells = null; }
 
 function speakerIcon(muted: boolean): SVGSVGElement {
   const svg = document.createElementNS(SVG_NS, 'svg');
@@ -88,7 +91,7 @@ function iconButton(className: string, label: string, onClick: () => void): HTML
 }
 
 /** A scoreboard row: the portrait with its status badge, the name tag and how they're connected, then mute and kick. */
-function memberRow(m: RoomMember, state: PanelState, t: Strings, act: (a: PanelAction) => void): HTMLElement {
+function memberRow(m: RoomMember, state: PanelState, t: Strings, act: (a: PanelAction) => void, views: SummonerButtons[]): HTMLElement {
   const can = rowActions(m, state);
   const color = tagColorCss(m.color, m.rgb);
   const row = el('div', `member${m.muted ? ' muted' : ''}${m.self ? ' me' : ''}`);
@@ -122,7 +125,9 @@ function memberRow(m: RoomMember, state: PanelState, t: Strings, act: (a: PanelA
     kick.textContent = '✕';
     icons.append(kick);
   }
-  row.append(portrait, who, icons);
+  const spells = renderSummoners(m, state.textOn, t, act);
+  views.push(spells);
+  row.append(portrait, who, spells.element, icons);
   return row;
 }
 
@@ -155,6 +160,8 @@ function voteButton(label: string, kind: 'ff' | 'ready', act: (a: PanelAction) =
 
 /** Draws the room panel on League's Tab scoreboard: the tabs on its cap, the vote buttons in its header, then the players or the history. */
 export function renderRoster(root: HTMLElement, state: PanelState, act: (a: PanelAction) => void): void {
+  dropRoster();
+  const views: SummonerButtons[] = [];
   const t = strings(state.lang);
   const history = state.history.filter((line) => historyVisible(line, state.chatFilter));
   // Redrawing rebuilds the list: keep where it was scrolled, and keep the history pinned to its newest line.
@@ -200,7 +207,7 @@ export function renderRoster(root: HTMLElement, state: PanelState, act: (a: Pane
   if (tab === 'members') {
     const slots = boardSlots(state.room.members, state.max);
     list.style.setProperty('--rows', String(slots.length / 2));
-    for (const m of slots) list.append(m ? memberRow(m, state, t, act) : emptyRow());
+    for (const m of slots) list.append(m ? memberRow(m, state, t, act, views) : emptyRow());
   } else if (history.length === 0) {
     list.append(el('div', 'empty', t.panelHistoryEmpty));
   } else {
@@ -208,5 +215,6 @@ export function renderRoster(root: HTMLElement, state: PanelState, act: (a: Pane
   }
   board.append(list);
   root.replaceChildren(cap, board);
+  stopSpells = animateSummoners(views);
   list.scrollTop = tab === 'history' && wasAtBottom ? list.scrollHeight : wasTop;
 }

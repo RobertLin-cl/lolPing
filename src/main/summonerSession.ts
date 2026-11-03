@@ -1,5 +1,5 @@
 import type { Settings } from '../shared/settings';
-import { castSpell, createSpellCooldown, type SummonerState, type SummonerSpellSlot } from '../shared/summonerSpells';
+import { clearSpellCooldown, castSpell, createSpellCooldown, type SummonerState, type SummonerSpellSlot } from '../shared/summonerSpells';
 
 type Selection = Pick<Settings, 'summonerD' | 'summonerF'>;
 
@@ -24,6 +24,13 @@ export class SummonerSession {
   }
 
   state(): SummonerState | null { return this.cooldowns; }
+
+  /** Restores one slot, including both Smite charges, without changing the other. */
+  clear(slot: SummonerSpellSlot): boolean {
+    if (!this.cooldowns) return false;
+    this.cooldowns = { ...this.cooldowns, [slot]: clearSpellCooldown(this.cooldowns[slot]) };
+    return true;
+  }
 
   cast(slot: SummonerSpellSlot, enabled: boolean): boolean {
     if (!enabled || !this.cooldowns) return false;

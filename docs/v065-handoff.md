@@ -9,24 +9,20 @@ Updated: 2026-11-03. Branch: `local/hardened`.
 - `1cbae54`: Remembered category filters shared by chat and panel history. Filter controls live only in panel history, as requested later.
 - `c3e910e`: Reproducible extraction of eleven original spell icons and sounds.
 - `2e0ef68`: Pure cooldown logic, including two sequential Smite charges and a 15-second cast gap.
+- `2293168`: Validated optional spell presence, delayed-packet protection and compatible spell-click transport.
 - `f7e451a`: Windows passive D/F input and local cooldown session, including room/fullscreen gates and resets.
 - `5ab0f8a`: Windows summoner settings, defaults and normalization; shared League-style picker; swapping D/F when choosing the other slot's spell; localization and tests.
 
 The standalone Summoner spells section sits below Emotes, with its own default-off switch, D/F choices and local sound switch. Its options remain visible but inert and grey while off. Rooms must be enabled; the room panel feature is not required. D defaults to Heal, F to Flash. There is no separate summoner switch in the Rooms expander or sound row in the Sound section.
 
-The settings UI, Windows local casting and room state synchronization are ready. The current uncommitted segment
-adds validated optional spell state to signed presence, protects it from delayed older packets, and adds the spell-click
-message and transport event. Protocol version remains 1. Panel display, scoreboard chat handling and sound playback
-are not wired yet, so casting still has no visible or audible feedback.
+The settings UI, Windows local casting, room synchronization and panel/chat interactions are ready.
+The current uncommitted segment adds D/F icons, local cooldown animation and Smite charges to every panel row;
+left-click reports state in the Scoreboard category and right-click clears an own slot. Cast sound playback is
+not wired yet. The room protocol stays at version 1.
 
 ## Next work, in order
 
-1. Room panel and scoreboard chat lines.
-   - Put two icons beside every member, with a JS clock sweep and remaining time; show Smite charges.
-   - Members without spell data use ready D Heal / F Flash.
-   - Left click posts the agreed League sentence in the scoreboard category, respecting the shared filter. The signed `spell` message, sender method and `remoteSpell` transport event are ready; add panel actions and main/chat handling.
-   - Right click on an own icon clears its cooldown. Casting itself must not post chat.
-2. Local cast sound and final verification.
+1. Local cast sound and final verification.
    - Play only the caster's own spell sound, respecting volume, global mute and the summoner sound switch.
    - Update both READMEs and design notes, including input monitoring and peer visibility in privacy notes.
    - Test two peers, old-peer fallback, reset paths, fullscreen gating, keyboard pass-through and actual sound.
@@ -53,7 +49,7 @@ For the committed local-casting segment (`f7e451a`):
 - Fullscreen gating, held-key repeats, custom-trigger typing order, platform support, and keys held during feature enabling are covered by native tests. A live fullscreen app has not been checked in this segment.
 - The first concurrent run hit native linker memory exhaustion and test-agent process failures. Sequential native compilation and a fresh full test run both passed.
 
-For the current synchronization segment:
+For the committed synchronization segment (`2293168`):
 
 - TypeScript and 742 helper / 533 context tests passed.
 - Focused protocol, validation, room manager and local session tests: 238 passed.
@@ -62,9 +58,19 @@ For the current synchronization segment:
 - Windows development app: real D typed normally and updated the room state with Heal's cooldown. Feature off removed the room's spell state. Temporary fields were removed and preferences restored.
 - Full regression passed with 145 files, 2249 tests passed and 11 skipped using Node 24.22.1 with `--maxWorkers=1 --pool=forks` and a 768 MB heap. Thread workers twice failed to clone their result with an out-of-memory error despite free system memory.
 
+For the current panel segment:
+
+- TypeScript passed; 742 helper and 533 context tests passed.
+- Full regression: 147 files passed; 2259 tests passed and 11 skipped, using Node 24.22.1, one worker and the forks pool.
+- Focused panel animation, IPC, formatting, filtering, session clear and text tests passed (66 tests).
+- Real Windows panel inspected through an isolated harness using production PanelWindows, renderer, RoomHistory, SummonerSession and startRoomText. No test message was sent to the user's room.
+- Verified both spell slots, live countdowns, own-slot right-click clear, Smite charges, old-peer ready fallback, long-name ellipsis, green history lines and Scoreboard filtering. Filtered spell lines stayed in history.
+- The isolated panel and event listeners were destroyed after QA. The normal development app remains open; no user preferences were changed by this panel QA.
+- Next: local cast sound, then final two-peer interaction checks and fullscreen/input checks before release. Actual cross-platform UI inspection still requires those operating systems.
+
 ## Local development notes
 
-- The development app was left open on the summoner section. The spell feature and lolPing enabled state were restored to their pre-test values (both on). The current segment has not been committed; no push or release was requested.
+- The development app was left open on the summoner section. The spell feature and lolPing enabled state were restored to their pre-test values (both on). The panel segment has not been committed; no push or release was requested.
 - Real npm is `C:/nvm4w/nodejs/npm.cmd`; npm/test subprocesses may need the existing sandbox escalation.
 - Use one Vitest worker with the threads pool to avoid local process/memory issues.
 - Close the development app before rebuilding native helpers, since the helper executable is locked while running.

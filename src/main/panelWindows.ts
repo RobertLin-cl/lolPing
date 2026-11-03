@@ -10,7 +10,7 @@ type View = PanelState['view'];
 /** What each window may ask for: the vote widget only answers, the roster does the rest. */
 const ALLOWED: Record<View, ReadonlySet<PanelAction['t']>> = {
   vote: new Set(['ballot']),
-  roster: new Set(['alive', 'mute', 'kick', 'vote', 'chatCategory']),
+  roster: new Set(['spell', 'clearSpell', 'alive', 'mute', 'kick', 'vote', 'chatCategory']),
 };
 
 interface Slot {

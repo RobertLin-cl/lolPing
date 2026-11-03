@@ -8,7 +8,7 @@ export const DEFAULT_CHAT_FILTER: Readonly<ChatFilter> = {
 };
 
 const CATEGORY: Record<HistoryLine['kind'], ChatCategory | null> = {
-  text: 'text', ping: 'ping', alive: 'scoreboard', vote: 'vote', note: null,
+  text: 'text', ping: 'ping', alive: 'scoreboard', spell: 'scoreboard', vote: 'vote', note: null,
   whisperTo: 'whisper', whisperFrom: 'whisper',
 };
 

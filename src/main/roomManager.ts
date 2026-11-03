@@ -95,6 +95,7 @@ export interface RemoteText {
 
 /** The snapshot a member clicked in the panel, to be shown as a scoreboard line. */
 export interface RemoteSpell {
+  at: number;
   peer: string;
   who: string;
   slot: SummonerSpellSlot;
@@ -648,7 +649,7 @@ export class RoomManager extends EventEmitter {
     else if (msg.t === 'text') {
       this.emit('remoteText', { kind: 'text', peer: m.peer, tag, displayId: target.displayId, x, y, text: msg.text } satisfies RemoteText);
     } else if (msg.t === 'spell') {
-      this.emit('remoteSpell', { peer: m.peer, tag, who: msg.who, slot: msg.slot, cooldown: msg.cooldown,
+      this.emit('remoteSpell', { at: msg.ts, peer: m.peer, tag, who: msg.who, slot: msg.slot, cooldown: msg.cooldown,
         displayId: target.displayId, x, y } satisfies RemoteSpell);
     } else if (msg.t === 'alive') {
       this.emit('remoteText', { kind: 'alive', peer: m.peer, tag, displayId: target.displayId, x, y, who: msg.who } satisfies RemoteText);

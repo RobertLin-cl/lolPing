@@ -16,9 +16,9 @@ describe('chatFilter', () => {
 
   it('hides exactly the kinds that belong to the switched-off category', () => {
     const groups = {
-      text: ['text'], ping: ['ping'], scoreboard: ['alive'], vote: ['vote'], whisper: ['whisperTo', 'whisperFrom'],
+      text: ['text'], ping: ['ping'], scoreboard: ['alive', 'spell'], vote: ['vote'], whisper: ['whisperTo', 'whisperFrom'],
     } as const;
-    const kinds: HistoryLine['kind'][] = ['text', 'ping', 'alive', 'vote', 'whisperTo', 'whisperFrom', 'note'];
+    const kinds: HistoryLine['kind'][] = ['text', 'ping', 'alive', 'spell', 'vote', 'whisperTo', 'whisperFrom', 'note'];
     for (const category of CHAT_CATEGORIES) {
       const filter = { ...DEFAULT_CHAT_FILTER, [category]: false };
       const hidden = kinds.filter((kind) => !historyVisible({ kind }, filter));

@@ -26,3 +26,5 @@ input::placeholder { color: var(--grey-2); font-weight: 400; }
 #count.full { color: var(--red); }
 small { flex: none; display: block; height: 18px; margin-top: 1px; padding: 0 2px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--grey-1); font-size: 11px; line-height: 18px; }
 small.warn { color: var(--red); }
+
+#log .spell { color: #C1FFAF; }

@@ -113,12 +113,12 @@ h1, p { margin: 0; }
 .history-filters button:hover, .history-filters button:focus-visible { border-color: var(--gold-1); }
 
 .list { flex: 1; min-height: 0; overflow-y: auto; }
-.list.members { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(var(--rows), 46px); grid-auto-flow: column; }
+.list.members { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: repeat(var(--rows), 46px); grid-auto-flow: column; }
 /* History is one column: cover the frame's centre line. */
 .list.history { padding: 10px 16px; background: #080e12; }
 .empty { padding: 24px 0; text-align: center; font-size: 13px; color: var(--grey-2); }
 
-.member { display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid rgba(70, 55, 20, .5); }
+.member { min-width: 0; display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid rgba(70, 55, 20, .5); }
 .member:not(.open):hover { background: rgba(240, 230, 210, .04); }
 .member.me { background: url("/ui/scoreboard-self.png") 0 0 / 100% 100% no-repeat; }
 .portrait {
@@ -161,3 +161,14 @@ button.tag:hover { text-decoration: underline; }
 .line.vote .said, .line.note .said { color: var(--gold-3); }
 .line .dir { margin-right: 4px; font-weight: 600; color: var(--violet); }
 .line.whisperTo .said, .line.whisperFrom .said { color: var(--violet); }
+
+.panel-spells { display: flex; flex: none; gap: 3px; }
+.panel-spell { position: relative; display: block; width: 32px; height: 32px; padding: 0; overflow: hidden; border: 1px solid var(--gold-4); background: #080e12; }
+.panel-spell:hover, .panel-spell:focus-visible { border-color: var(--gold-1); }
+.panel-spell img { display: block; width: 100%; height: 100%; }
+.panel-spell.cooling img { filter: saturate(.35); }
+.spell-sweep { position: absolute; inset: 0; background: conic-gradient(rgba(0, 0, 0, .72) var(--sweep), transparent 0); }
+.panel-spell kbd { position: absolute; top: 0; left: 1px; font: 700 8px/10px var(--sans); color: var(--gold-1); text-shadow: 0 1px 2px #000; }
+.spell-time { position: absolute; inset: 0; display: grid; place-items: center; font: 700 12px/1 var(--sans); color: white; text-shadow: 0 1px 3px #000, 1px 0 2px #000; }
+.spell-charges { position: absolute; right: 1px; bottom: 0; font: 700 10px/11px var(--sans); color: var(--gold-1); text-shadow: 0 1px 2px #000; }
+.line.spell .said { color: #C1FFAF; }

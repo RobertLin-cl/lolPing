@@ -204,6 +204,7 @@ export interface PanelState {
 
 /** What a click in a panel window asks for. An `alive` line is placed at the cursor by the app, not by the page. */
 export type PanelAction =
+  | { t: 'spell' | 'clearSpell'; peer: string; slot: 'd' | 'f' }
   | { t: 'chatCategory'; category: ChatCategory; on: boolean }
   | { t: 'alive'; peer: string }
   | { t: 'mute'; peer: string; on: boolean }
@@ -227,6 +228,10 @@ export function parsePanelAction(raw: unknown): PanelAction | null {
     case 'chatCategory':
       return isChatCategory(a.category) && typeof a.on === 'boolean'
         ? { t: 'chatCategory', category: a.category, on: a.on } : null;
+    case 'spell':
+    case 'clearSpell':
+      return isPeer(a.peer) && (a.slot === 'd' || a.slot === 'f')
+        ? { t: a.t, peer: a.peer, slot: a.slot } : null;
     case 'alive':
       return isPeer(a.peer) ? { t: 'alive', peer: a.peer } : null;
     case 'mute':

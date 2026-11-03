@@ -58,6 +58,18 @@ describe('SummonerSession', () => {
     expect(new SummonerSession(() => 1000).state()).toBeNull();
   });
 
+  it('clears only the selected slot and restores both Smite charges', () => {
+    const session = new SummonerSession(() => 1000);
+    expect(session.clear('d')).toBe(false);
+    session.sync({ summonerD: 'smite', summonerF: 'flash' }, 'room');
+    session.cast('d', true);
+    session.cast('f', true);
+    const flash = session.state()?.f;
+    expect(session.clear('d')).toBe(true);
+    expect(session.state()?.d).toEqual({ spell: 'smite', rechargeEndsAt: [], castEndsAt: 0 });
+    expect(session.state()?.f).toBe(flash);
+  });
+
   it('uses sequential Smite recharge times and its separate cast gap', () => {
     let now = 1000;
     const session = new SummonerSession(() => now);
