@@ -1,6 +1,6 @@
 import type { TextAnswer, TextBoxText } from '../../shared/ipc';
 import { tagColorCss } from '../../shared/roomColors';
-import type { HistoryLine } from '../../shared/roomHistory';
+import { historyTime, type HistoryLine } from '../../shared/roomHistory';
 import { MAX_TEXT } from '../../shared/roomProtocol';
 import { completeCommand, type CompletionCycle } from '../../shared/textCommands';
 
@@ -39,9 +39,13 @@ function showLines(lines: readonly HistoryLine[]): void {
   const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 8;
   log.replaceChildren(...lines.map((line) => {
     const item = document.createElement('li');
+    const time = document.createElement('span');
+    time.className = 'time';
+    time.textContent = `${historyTime(line.at)} `;
+    item.append(time);
     if (!line.tag) {
       item.className = line.kind; // a vote result, or a note of what one of our commands did
-      item.textContent = line.text;
+      item.append(line.text);
       return item;
     }
     const name = document.createElement('span');

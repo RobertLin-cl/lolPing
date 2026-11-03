@@ -12,12 +12,12 @@ describe('RoomHistory', () => {
     expect(history.lines().map((l) => l.text)).toEqual(['line 1', 'line 2']);
   });
 
-  it('keeps only the newest 200 lines', () => {
+  it('keeps only the newest 500 lines', () => {
     const history = new RoomHistory();
-    for (let n = 1; n <= 205; n++) history.push(line(n));
-    expect(history.lines()).toHaveLength(200);
+    for (let n = 1; n <= 505; n++) history.push(line(n));
+    expect(history.lines()).toHaveLength(500);
     expect(history.lines()[0].text).toBe('line 6');
-    expect(history.lines()[199].text).toBe('line 205');
+    expect(history.lines()[499].text).toBe('line 505');
   });
 
   it('tells its listener after each pushed line, with the line already in', () => {

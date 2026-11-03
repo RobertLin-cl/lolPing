@@ -1,8 +1,8 @@
 import type { HistoryLine } from '../shared/roomHistory';
 
-const MAX_LINES = 200;
+const MAX_LINES = 500;
 
-/** What was said in the room since we joined, newest 200 lines. Memory only; the panel reads it. */
+/** What was said in the room since we joined, newest 500 lines. Memory only; the panel reads it. */
 export class RoomHistory {
   private readonly all: HistoryLine[] = [];
 

@@ -14,3 +14,10 @@ export interface HistoryLine {
   tag: { name: string; color: number; rgb: TagRgb | null } | null;
   text: string;
 }
+
+/** Local wall-clock time, independent of the UI language and always in 24-hour form. */
+export function historyTime(at: number): string {
+  const date = new Date(at);
+  const parts = [date.getHours(), date.getMinutes(), date.getSeconds()];
+  return `[${parts.map((part) => String(part).padStart(2, '0')).join(':')}]`;
+}

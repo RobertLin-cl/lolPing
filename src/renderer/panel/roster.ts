@@ -1,7 +1,7 @@
 import { strings, type Strings } from '../../shared/i18n';
 import type { PanelAction, PanelState } from '../../shared/ipc';
 import type { RoomMember } from '../../shared/room';
-import type { HistoryLine } from '../../shared/roomHistory';
+import { historyTime, type HistoryLine } from '../../shared/roomHistory';
 import { tagColorCss } from '../../shared/roomColors';
 import { el } from './vote';
 
@@ -133,6 +133,7 @@ function emptyRow(): HTMLElement {
 
 function historyLine(line: HistoryLine, t: Strings): HTMLElement {
   const row = el('div', `line ${line.kind}`);
+  row.append(el('span', 'time', `${historyTime(line.at)} `));
   if (line.kind === 'whisperTo') row.append(el('span', 'dir', t.chatWhisperTo));
   else if (line.kind === 'whisperFrom') row.append(el('span', 'dir', t.chatWhisperFrom));
   if (line.tag) {

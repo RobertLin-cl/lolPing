@@ -12,6 +12,7 @@ main { display: flex; flex-direction: column; height: 100%; padding: 0 2px; colo
 #hide:hover { color: var(--gold-1); }
 #log { flex: 1; min-height: 0; margin: 0 0 6px; padding: 4px 6px; overflow-y: auto; list-style: none; font: 14px/20px var(--sans); overflow-wrap: anywhere; }
 #log li + li { margin-top: 2px; }
+#log .time { color: var(--grey-1); font-style: normal; font-variant-numeric: tabular-nums; white-space: nowrap; }
 #log .name { font-weight: 600; }
 #log .vote, #log .note { color: var(--gold-2); font-style: italic; }
 #log .whisper { color: var(--violet); }
