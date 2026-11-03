@@ -53,6 +53,8 @@ interface Props<T extends string> {
   fxFor?: (id: EmoteRef) => number | undefined;
   onChange: (patch: WheelPatch<T>) => void;
   onPreview: (id: T) => void;
+  /** Greyed out and locked, like a dimmed settings row. */
+  dim?: boolean;
 }
 
 const activate = (fn: () => void) => (e: KeyboardEvent) => {
@@ -63,7 +65,7 @@ const activate = (fn: () => void) => (e: KeyboardEvent) => {
 };
 
 export function WheelEditor<T extends string>({
-  wheel, center, centerOn, trigger, pool, defaults, labels, poolExtra, onDropFiles, onFxPick, fxIds, fxFor, onChange, onPreview,
+  wheel, center, centerOn, trigger, pool, defaults, labels, poolExtra, onDropFiles, onFxPick, fxIds, fxFor, onChange, onPreview, dim,
 }: Props<T>) {
   const t = useText();
   const [picked, setPicked] = useState<WheelSource<T> | null>(null);
@@ -154,7 +156,7 @@ export function WheelEditor<T extends string>({
   const isPicked = (match: (p: WheelSource<T>) => boolean) => (picked !== null && match(picked) ? ' picked' : '');
 
   return (
-    <div className="card wheelEditor">
+    <div className={`card wheelEditor${dim ? ' dim' : ''}`}>
       <div className="weHead">
         <div className="lbl">
           {labels.title}

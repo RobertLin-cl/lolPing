@@ -2,8 +2,8 @@ import { Dropdown, FluentProvider, motionTokens, Option, webDarkTheme, webLightT
 import {
   ArrowMove24Regular, ArrowSync24Regular, CursorClick24Regular, DataPie24Regular, Games24Regular, Info24Regular, Keyboard24Regular, MusicNote224Regular, Pin24Regular,
   Power24Regular, ResizeLarge24Regular, Rocket24Regular, Settings24Regular, Speaker224Regular, SpeakerMute24Regular,
-  Apps24Regular, Timer24Regular, Cursor24Regular, Emoji24Regular, LocalLanguage24Regular, PeopleCommunity24Regular,
-  Sparkle24Regular,
+  Timer24Regular, Cursor24Regular, Emoji24Regular, LocalLanguage24Regular, Location24Regular, PeopleCommunity24Regular,
+  Sparkle24Regular, ToggleRight24Regular,
 } from '@fluentui/react-icons';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { LANGUAGE_NAMES, LANGUAGE_PREFS, resolveLang, strings, type LanguagePref, type Strings } from '../../shared/i18n';
@@ -37,14 +37,13 @@ const MAC = PLATFORM === 'mac';
 const LENGTH_UNIT = MAC ? 'pt' : 'px';
 
 const SECTIONS: { id: string; label: (t: Strings) => string; icon: ReactNode; feature?: FeatureId }[] = [
-  { id: 'trigger', label: (t) => t.navTrigger, icon: <Cursor24Regular /> },
-  { id: 'toggle', label: (t) => t.navToggle, icon: <Keyboard24Regular /> },
-  { id: 'pings', label: (t) => t.navPings, icon: <Speaker224Regular /> },
+  { id: 'toggle', label: (t) => t.navToggle, icon: <ToggleRight24Regular /> },
+  { id: 'sound', label: (t) => t.navSound, icon: <Speaker224Regular /> },
   { id: 'wheel', label: (t) => t.navWheel, icon: <DataPie24Regular /> },
+  { id: 'pings', label: (t) => t.navPings, icon: <Location24Regular /> },
   { id: 'emotes', label: (t) => t.navEmotes, icon: <Emoji24Regular />, feature: 'emotes' },
   { id: 'room', label: (t) => t.navRoom, icon: <PeopleCommunity24Regular />, feature: 'rooms' },
   { id: 'teammate', label: (t) => t.navTeammate, icon: <Sparkle24Regular />, feature: 'teammate' },
-  { id: 'features', label: (t) => t.navFeatures, icon: <Apps24Regular /> },
   { id: 'app', label: (t) => t.navApp, icon: <Settings24Regular /> },
 ];
 
@@ -196,7 +195,48 @@ function SettingsPage({ settings: s, status, update }: { settings: Settings; sta
         {MAC && status.helper === 'noAccess' ? <PermissionCard stale={status.staleAccess === true} /> : null}
         <StatusCard settings={s} status={status} />
 
-        <div className="section" id="trigger">{t.navTrigger}</div>
+        <div className="section" id="toggle">{t.navToggle}</div>
+        <SettingRow icon={<Keyboard24Regular />} title={t.toggleShortcut} description={t.toggleShortcutDesc}>
+          <KeyCapture
+            parts={hotkeyParts(s.toggleHotkey, PLATFORM)}
+            requireModifier
+            error={hotkeyError}
+            onCapture={async (c) => {
+              const result = await update({ toggleHotkey: c });
+              setHotkeyError(result.ok ? null : result.error);
+            }}
+          />
+        </SettingRow>
+        <FeaturesSection settings={s} update={update} />
+
+        {/* While lolPing is off, rows that do nothing then grey out: Sound, Wheel, Pings, Emotes and most of Room. */}
+        <div className="section" id="sound">{t.navSound}</div>
+        <SwitchRow icon={<SpeakerMute24Regular />} title={t.mute} checked={s.muted} onChange={(v) => void update({ muted: v })} dim={off} />
+        <SliderRow limit="volume" icon={<Speaker224Regular />} title={t.volume} value={s.volume}
+          format={(v) => `${v}`} onChange={(v) => void update({ volume: v })} dim={off || s.muted} />
+        {featureOn(s, 'emotes') ? (
+          <SwitchRow icon={<Emoji24Regular />} title={t.emoteSound} description={t.emoteSoundDesc}
+            checked={s.emoteSound} onChange={(v) => void update({ emoteSound: v })} dim={off || s.muted} />
+        ) : null}
+        <SwitchRow icon={<MusicNote224Regular />} title={t.tickSound} description={t.tickSoundDesc}
+          checked={s.tickSound} onChange={(v) => void update({ tickSound: v })} dim={off || s.muted} />
+
+        <div className="section" id="wheel">{t.navWheel}</div>
+        <SliderRow limit="wheelSizePx" icon={<ResizeLarge24Regular />} title={t.wheelSize} description={t.wheelSizeDesc}
+          value={s.wheelSizePx} format={(v) => `${v} ${LENGTH_UNIT}`} onChange={(v) => void update({ wheelSizePx: v })} dim={off} />
+        <SliderRow limit="dragThresholdPx" icon={<ArrowMove24Regular />} title={t.dragDistance} description={t.dragDistanceDesc}
+          value={s.dragThresholdPx} format={(v) => `${v} ${LENGTH_UNIT}`} onChange={(v) => void update({ dragThresholdPx: v })} dim={off} />
+        {PLATFORM === 'win' && ( // only the Windows helper has a fullscreen probe
+          <SwitchRow icon={<Games24Regular />} title={t.gameCheck}
+            description={t.gameCheckDesc}
+            checked={s.gameCheck} onChange={(v) => void update({ gameCheck: v })} dim={off} />
+        )}
+        <SliderRow limit="pingDurationS" icon={<Timer24Regular />} title={t.pingDuration} description={t.pingDurationDesc}
+          value={s.pingDurationS} format={(v) => `${v.toFixed(1)} s`} onChange={(v) => void update({ pingDurationS: v })} dim={off} />
+        <SwitchRow icon={<Pin24Regular />} title={t.keepLastPing} description={t.keepLastPingDesc}
+          checked={s.keepLastPing} onChange={(v) => void update({ keepLastPing: v })} dim={off} />
+
+        <div className="section" id="pings">{t.navPings}</div>
         <SettingRow icon={<Cursor24Regular />} title={t.triggerKey} dim={off}
           description={(
             <>
@@ -210,64 +250,27 @@ function SettingsPage({ settings: s, status, update }: { settings: Settings; sta
             }} />
         </SettingRow>
         {triggerError ? <div className="rowError" role="alert">{triggerError}</div> : null}
-        <SliderRow limit="dragThresholdPx" icon={<ArrowMove24Regular />} title={t.dragDistance} description={t.dragDistanceDesc}
-          value={s.dragThresholdPx} format={(v) => `${v} ${LENGTH_UNIT}`} onChange={(v) => void update({ dragThresholdPx: v })} dim={off} />
         <SwitchRow icon={<CursorClick24Regular />} title={t.clickPing(trigger)}
           description={t.clickPingDesc(trigger)}
           checked={s.clickPing} onChange={(v) => void update({ clickPing: v })} dim={off} />
-        {PLATFORM === 'win' && ( // only the Windows helper has a fullscreen probe
-          <SwitchRow icon={<Games24Regular />} title={t.gameCheck}
-            description={t.gameCheckDesc}
-            checked={s.gameCheck} onChange={(v) => void update({ gameCheck: v })} dim={off} />
-        )}
-
-        <div className="section" id="toggle">{t.navToggle}</div>
-        <SettingRow icon={<Keyboard24Regular />} title={t.toggleShortcut} description={t.toggleShortcutDesc}>
-          <KeyCapture
-            parts={hotkeyParts(s.toggleHotkey, PLATFORM)}
-            requireModifier
-            error={hotkeyError}
-            onCapture={async (c) => {
-              const result = await update({ toggleHotkey: c });
-              setHotkeyError(result.ok ? null : result.error);
-            }}
-          />
-        </SettingRow>
-        <SwitchRow icon={<Power24Regular />} title={t.startEnabled} description={t.startEnabledDesc}
-          checked={s.enabledOnStart} onChange={(v) => void update({ enabledOnStart: v })} />
-
-        <div className="section" id="pings">{t.navPings}</div>
         <SliderRow limit="pingSizePx" icon={<ResizeLarge24Regular />} title={t.pingSize} value={s.pingSizePx}
-          format={(v) => `${v} ${LENGTH_UNIT}`} onChange={(v) => void update({ pingSizePx: v })} />
-        <SliderRow limit="pingDurationS" icon={<Timer24Regular />} title={t.pingDuration} description={t.pingDurationDesc}
-          value={s.pingDurationS} format={(v) => `${v.toFixed(1)} s`} onChange={(v) => void update({ pingDurationS: v })} />
-        <SwitchRow icon={<Pin24Regular />} title={t.keepLastPing} description={t.keepLastPingDesc}
-          checked={s.keepLastPing} onChange={(v) => void update({ keepLastPing: v })} />
-        <SliderRow limit="volume" icon={<Speaker224Regular />} title={t.volume} value={s.volume}
-          format={(v) => `${v}`} onChange={(v) => void update({ volume: v })} dim={s.muted} />
-        <SwitchRow icon={<SpeakerMute24Regular />} title={t.mute} checked={s.muted} onChange={(v) => void update({ muted: v })} />
-        <SwitchRow icon={<MusicNote224Regular />} title={t.tickSound} description={t.tickSoundDesc}
-          checked={s.tickSound} onChange={(v) => void update({ tickSound: v })} />
-
-        <div className="section" id="wheel">{t.navWheel}</div>
-        <SliderRow limit="wheelSizePx" icon={<ResizeLarge24Regular />} title={t.wheelSize} description={t.wheelSizeDesc}
-          value={s.wheelSizePx} format={(v) => `${v} ${LENGTH_UNIT}`} onChange={(v) => void update({ wheelSizePx: v })} />
+          format={(v) => `${v} ${LENGTH_UNIT}`} onChange={(v) => void update({ pingSizePx: v })} dim={off} />
         <WheelEditor wheel={s.wheel} center={s.clickPingId} centerOn={s.clickPing} trigger={trigger} pool={pingPool}
           defaults={{ wheel: DEFAULT_WHEEL, center: DEFAULT_CLICK_PING }}
           labels={{ title: t.wheelTitle, desc: t.wheelDesc(trigger), poolTitle: t.allPings, poolDesc: t.allPingsDesc }}
-          onChange={(patch) => void update(pingPatch(patch))} onPreview={(id) => void api.previewPing(id)} />
+          onChange={(patch) => void update(pingPatch(patch))} onPreview={(id) => void api.previewPing(id)} dim={off} />
 
         {featureOn(s, 'emotes') ? (
           <>
             <div className="section" id="emotes">{t.navEmotes}</div>
-            <EmoteSection settings={s} update={update} lengthUnit={LENGTH_UNIT} />
+            <EmoteSection settings={s} update={update} lengthUnit={LENGTH_UNIT} dim={off} />
           </>
         ) : null}
 
         {featureOn(s, 'rooms') ? (
           <>
             <div className="section" id="room">{t.navRoom}</div>
-            <RoomSection settings={s} update={update} />
+            <RoomSection settings={s} update={update} dim={off} />
           </>
         ) : null}
 
@@ -278,12 +281,11 @@ function SettingsPage({ settings: s, status, update }: { settings: Settings; sta
           </>
         ) : null}
 
-        <div className="section" id="features">{t.navFeatures}</div>
-        <FeaturesSection settings={s} update={update} />
-
         <div className="section" id="app">{t.navApp}</div>
         <SwitchRow icon={<Rocket24Regular />} title={t.launchAtStartup} description={t.launchAtStartupDesc}
           checked={s.launchAtStartup} onChange={(v) => void update({ launchAtStartup: v })} />
+        <SwitchRow icon={<Power24Regular />} title={t.startEnabled} description={t.startEnabledDesc}
+          checked={s.enabledOnStart} onChange={(v) => void update({ enabledOnStart: v })} />
         <SettingRow icon={<LocalLanguage24Regular />} title={t.language} description={t.languageDesc}>
           <Dropdown
             style={{ minWidth: 170 }}

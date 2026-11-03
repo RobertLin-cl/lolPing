@@ -4,7 +4,7 @@ import type { RoomFeatureOff } from './roomProtocol';
 export type FeatureId = 'teammate' | 'emotes' | 'rooms' | 'roomText' | 'roomVotes' | 'roomPanel';
 export type Features = Record<FeatureId, boolean>;
 
-/** In the order of the Features page. A feature with `requires` counts as off while that one is off. */
+/** In the order of Settings → Switches. A feature with `requires` counts as off while that one is off. */
 export const FEATURES: readonly { id: FeatureId; requires?: FeatureId }[] = [
   { id: 'teammate' },
   { id: 'emotes' },
@@ -27,12 +27,12 @@ export function normalizeFeatures(raw: unknown): Features {
   return out;
 }
 
-/** Whether the Features page offers a feature on this platform. This fork never offers the teammate, on any platform. */
+/** Whether Settings → Switches offers a feature on this platform. This fork never offers the teammate, on any platform. */
 export function featureVisible(id: FeatureId, _platform: Platform): boolean {
   return id !== 'teammate';
 }
 
-/** The Features page's rows on this platform: each top-level feature with the features that require it, in list order. */
+/** The rows of Settings → Switches on this platform: each top-level feature with the ones that require it, in list order. */
 export function featureGroups(platform: Platform): { id: FeatureId; parts: FeatureId[] }[] {
   const visible = FEATURES.filter(({ id }) => featureVisible(id, platform));
   return visible.filter((f) => f.requires === undefined)

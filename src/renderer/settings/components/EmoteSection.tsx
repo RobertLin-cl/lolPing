@@ -1,6 +1,6 @@
 import { Button, Spinner } from '@fluentui/react-components';
 import {
-  CursorClick24Regular, Emoji24Regular, ImageAdd24Regular, ResizeLarge24Regular, Speaker2Regular, Speaker224Regular, SpeakerMuteRegular,
+  CursorClick24Regular, Emoji24Regular, ImageAdd24Regular, ResizeLarge24Regular, Speaker2Regular, SpeakerMuteRegular,
 } from '@fluentui/react-icons';
 import { useEffect, useRef, useState } from 'react';
 import { DEFAULT_CLICK_EMOTE, DEFAULT_EMOTE_WHEEL, EMOTE_CATALOG } from '../../../shared/emoteCatalog';
@@ -124,7 +124,10 @@ function emotePatch(p: WheelPatch<EmoteRef>): Partial<Settings> {
   return patch;
 }
 
-export function EmoteSection({ settings: s, update, lengthUnit }: { settings: Settings; update: Update; lengthUnit: string }) {
+/** `dim`: lolPing is off, so the whole section greys out. */
+export function EmoteSection({ settings: s, update, lengthUnit, dim }: {
+  settings: Settings; update: Update; lengthUnit: string; dim: boolean;
+}) {
   const t = useText();
   const [keyError, setKeyError] = useState<string | null>(null);
   // A refusal is about the keys as they were: it goes once any of them changes. (Compared by value; a refused patch still hands back a fresh settings object.)
@@ -193,7 +196,7 @@ export function EmoteSection({ settings: s, update, lengthUnit }: { settings: Se
 
   return (
     <>
-      <SettingRow icon={<Emoji24Regular />} title={t.emoteKey}
+      <SettingRow icon={<Emoji24Regular />} title={t.emoteKey} dim={dim}
         description={(
           <>
             {keyOff ? t.emoteKeyOffDesc : t.emoteKeyDesc}
@@ -205,13 +208,12 @@ export function EmoteSection({ settings: s, update, lengthUnit }: { settings: Se
       </SettingRow>
       {keyError ? <div className="rowError" role="alert">{keyError}</div> : null}
       <SwitchRow icon={<CursorClick24Regular />} title={t.emoteClick(key)} description={t.emoteClickDesc(key)}
-        checked={s.emoteClick} onChange={(v) => void update({ emoteClick: v })} dim={keyOff} />
+        checked={s.emoteClick} onChange={(v) => void update({ emoteClick: v })} dim={dim || keyOff} />
+      {/* The sizes stay live without an emote key: friends' emotes are drawn at them too. */}
       <SliderRow limit="emoteSizePx" icon={<ResizeLarge24Regular />} title={t.emoteSize} value={s.emoteSizePx}
-        format={(v) => `${v} ${lengthUnit}`} onChange={(v) => void update({ emoteSizePx: v })} dim={keyOff} />
+        format={(v) => `${v} ${lengthUnit}`} onChange={(v) => void update({ emoteSizePx: v })} dim={dim} />
       <SliderRow limit="customEmoteSizePx" icon={<ResizeLarge24Regular />} title={t.customEmoteSize} description={t.customEmoteSizeDesc}
-        value={s.customEmoteSizePx} format={(v) => `${v} ${lengthUnit}`} onChange={(v) => void update({ customEmoteSizePx: v })} dim={keyOff} />
-      <SwitchRow icon={<Speaker224Regular />} title={t.emoteSound} description={t.emoteSoundDesc}
-        checked={s.emoteSound} onChange={(v) => void update({ emoteSound: v })} dim={keyOff} />
+        value={s.customEmoteSizePx} format={(v) => `${v} ${lengthUnit}`} onChange={(v) => void update({ customEmoteSizePx: v })} dim={dim} />
       <WheelEditor wheel={s.emoteWheel} center={s.clickEmoteId} centerOn={s.emoteClick && !keyOff} trigger={key}
         pool={pool} poolExtra={importer} onDropFiles={importFiles}
         onFxPick={(id, fx) => void api.setEmoteFx(id, fx)}
@@ -219,7 +221,7 @@ export function EmoteSection({ settings: s, update, lengthUnit }: { settings: Se
         fxFor={(id) => s.customEmotes.find((c) => c.id === id)?.fx}
         defaults={{ wheel: DEFAULT_EMOTE_WHEEL, center: DEFAULT_CLICK_EMOTE }}
         labels={{ title: t.emoteWheelTitle, desc: t.emoteWheelDesc(key), poolTitle: t.allEmotes, poolDesc: t.allEmotesDesc }}
-        onChange={(patch) => void update(emotePatch(patch))} onPreview={(ref) => void api.previewEmote(ref)} />
+        onChange={(patch) => void update(emotePatch(patch))} onPreview={(ref) => void api.previewEmote(ref)} dim={dim} />
     </>
   );
 }
