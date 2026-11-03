@@ -418,6 +418,17 @@ Friends in a room can type a line, vote, and see who is in the room, in the way 
 - Category chips in the room panel History tab toggle text, pings, scoreboard lines (alive), votes and whispers. `chatFilter` remembers all five booleans, defaulting each to on in old or damaged settings. `src/shared/chatFilter.ts` maps history kinds to categories; command notes always show. Both views apply the same shared predicate to the full history and saved filter. The chat window has no filter controls. Hidden categories still count toward the 500-line cap and never reveal or restart the chat window timer, including incoming whispers (which still update the reply target). The manual chat shortcut works with any filter. Text at a spot, scrolling text and vote widgets keep their existing behaviour. Only the roster panel may change a category through a validated `chatCategory` panel action; vote widgets cannot. Changes are pushed to chat without opening it.
 - `src/shared/textCommands.ts` reads the input box: `/ff` and `/surrender` start or join a surrender vote, `/noff` votes no, `/ready` starts a ready check. `/mute <name>` toggles the session mute of the other members with that name, in any case (`muteToggle`: muted unless every one of them already is), the same mute as the member list's button; `/mute all` takes every other member and wins over a member really called "all"; nothing is sent, and a `note` line only we see goes into the history. No such member answers `noMember`, keeping the text. `/w` and `/r` whisper (see Whispers below). Tab completes a slash and the start of one word to the first command it fits (`completeCommand`, in `COMMANDS` order; `/mute`, `/r` and `/w` complete with their space), after `/mute ` to `all` and then the other members' names that start with what follows (a member called "all" is left out), and after `/w ` to the other members' names, each with a space for the message; the names are asked of the main process at each press; further presses cycle through the fits while the box still shows the last completion, Shift+Tab backwards, and any typing starts over. Any other slash and word (`/remake`) is not sent and shows a hint; a slash with no letter after it (a lone `/`, `//`, `/ ok`) is sent as plain text. With votes off, the vote commands answer "votes are off".
 
+### Summoner spell cooldown logic
+
+`src/shared/summonerSpells.ts` defines the eleven spells and their base cooldowns, without haste. Its functions take
+`now` in milliseconds and return new state rather than changing the input; no timers, OS hooks or network calls run
+here. A regular spell has one charge and one recharge end time. Smite starts with two charges, restores one every
+90 seconds in sequence, and requires 15 seconds between casts. Spending its second charge keeps the first recharge
+end and queues another 90 seconds after it. A view removes expired recharge times before counting charges, so a
+late update catches up without timer ticks. The cast gap still applies when a charge returns during it. Clearing a
+cooldown restores every charge and removes the gap; creating a new spell state does the same after a session or
+selection change. Runtime settings, input, presence and panel wiring are added separately.
+
 ### Whispers (this fork)
 
 `/w <name> <message>` and `/r <message>` work as in League: a whisper goes to one member, and `/r` answers the member who whispered us last. Nobody else in the room can read a whisper, or tell who sent it or to whom.
