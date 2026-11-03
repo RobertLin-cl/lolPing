@@ -79,7 +79,7 @@ The wheel, from the top going clockwise: Danger, Push, On My Way, All In, Assist
 
 ## Settings
 
-<img src="docs/media/settings.png" width="760" alt="The lolPing settings window, with sections for trigger, toggle, pings and sound, wheel, emotes, room and app">
+<img src="docs/media/settings.png" width="760" alt="The lolPing settings window, with sections for switches, sound, wheel, pings, emotes, room and app">
 
 - **Switches:** the **enable / disable shortcut**, which must include Ctrl, Alt or Win (⌃, ⌥ or ⌘ on a Mac). Below it, the AI teammate (off by default, see [AI teammate](#ai-teammate)), and the parts you can turn off when you don't use them: emotes, and rooms with chat, votes and the room panel under it. A feature that is off has no keys, no settings section, sends nothing and ignores what friends send for it.
 - **Sound:** **Mute all sounds**, volume, emote sound and the wheel's tick sound.
