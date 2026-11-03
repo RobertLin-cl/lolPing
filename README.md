@@ -228,6 +228,8 @@ Pull requests and ideas are welcome. Before you start:
 
 ## Ping assets
 
+The summoner spell icons in `assets/summoners` are original CommunityDragon PNGs from League patch 16.21, downloaded by `tools/extract-assets/extract_assets.py --summoner-icons`. Their WAV sounds come from Riot’s `Common.wad.client` through the existing WAD/BNK decoder, vgmstream and FFmpeg. Downloads run only when a developer extracts assets, not while the app runs.
+
 The icons in `assets/textures` and the sounds in `assets/sounds` come from a local League of Legends install. [`tools/extract-assets`](tools/extract-assets) explains how to extract them again after a patch. The emote animations, icons and sounds in `assets/emotes` are © Riot Games too, and `tools/extract-assets --emotes` bakes them from the same install.
 
 ## License

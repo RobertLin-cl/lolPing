@@ -234,6 +234,8 @@ npm run dev
 
 ## 信号素材
 
+`assets/summoners` 中的召唤师技能图标是英雄联盟 16.21 版本的 CommunityDragon 原始 PNG，由 `tools/extract-assets/extract_assets.py --summoner-icons` 下载。对应的 WAV 音效由现有 WAD/BNK 解码流程、vgmstream 和 FFmpeg 从 Riot 的 `Common.wad.client` 中提取。只有开发者提取素材时才会下载，应用运行时不会请求这些网址。
+
 `assets/textures` 中的图标和 `assets/sounds` 中的音效提取自本地安装的英雄联盟。游戏更新后如何重新提取，请见 [`tools/extract-assets`](tools/extract-assets)。`assets/emotes` 中的表情动画、图标和音效同样归 Riot Games 所有，由 `tools/extract-assets --emotes` 从同一份安装中烘焙生成。
 
 ## 许可证

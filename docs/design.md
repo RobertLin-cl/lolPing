@@ -74,6 +74,17 @@ The extraction scripts live in `tools/extract-assets/`, together with a README. 
 4. **Decoding:** the clips are Wwise Vorbis (`0xFFFF`), decoded with `vgmstream-cli` (r2117).
 5. **Mixing:** layer containers play their children at the same time. They are mixed with ffmpeg `amix` plus `alimiter` (limit −1 dB) to avoid clipping. Each file has at most 35 ms of silence at the start.
 
+Summoner spell icon extraction is separate from the game-install modes: `--summoner-icons` downloads the eleven
+original CommunityDragon PNGs into `assets/summoners`, with an optional `--summoner-patch` for repeatable extraction.
+It needs no image library or sound tools. The extractor validates PNG headers, dimensions and size, downloads and
+checks the complete set before replacing files, and leaves unrelated assets alone. Only this developer command
+contacts CommunityDragon; it adds no app network request. `--summoner-sounds` extracts eleven WAVs from the same patch's
+`Common.wad.client`, using `misc_gameplay_sfx_events.bnk` and `misc_gameplay_sfx_audio.bnk`. The event table lives in
+`summoner_assets.py`; the existing bank walker, vgmstream and ffmpeg decode and mix each event. All sounds decode
+successfully before replacing previous assets. Riot WADs are downloaded through ManifestDownloader with an exact
+file filter, after checking the manifest's size; no substitute source is used on failure. Developer tools and WADs
+stay in the ignored extraction cache and do not ship.
+
 ## 4. Architecture
 
 ```

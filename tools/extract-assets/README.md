@@ -2,6 +2,59 @@
 
 `assets/sounds`, `assets/textures`, `assets/emotes` and `assets/ui` were extracted from a local League of Legends install. This tool regenerates them after a League patch changes the pings or emotes.
 
+## Summoner spells
+
+The eleven summoner spell icons come from CommunityDragon's game-data PNGs. This mode needs only Python 3.14+;
+it does not need a League install, Pillow, ffmpeg or vgmstream, and it does not download sound banks.
+
+```bash
+py -3.14 tools/extract-assets/extract_assets.py --summoner-icons --summoner-patch 16.21
+```
+
+Omit `--summoner-patch` to use `latest`. Use a patch number when regenerating the same assets later.
+The files go to `assets/summoners/<spell>.png`. Their source is
+`https://raw.communitydragon.org/<patch>/plugins/rcp-be-lol-game-data/global/default/data/spells/icons2d/`.
+`summoner_assets.py` pins each original filename. It checks the whole set before replacing icons, preserves the PNG
+bytes and leaves unrelated assets alone. A failed download stops the run; it does not try another source.
+
+Run its tests without network access:
+
+```bash
+py -3.14 -m unittest discover -s tools/extract-assets/tests
+```
+
+The eleven WAV sounds come from the same patch's `Common.wad.client`, using these banks:
+
+- `assets/sounds/wwise2016/sfx/shared/misc_gameplay_sfx_events.bnk`
+- `assets/sounds/wwise2016/sfx/shared/misc_gameplay_sfx_audio.bnk`
+
+`SUMMONER_SOUNDS` in `summoner_assets.py` lists the game event for each spell. The existing bank walker, vgmstream
+and ffmpeg decode and mix its media. Every event and media ID must resolve. All eleven sounds are decoded in a
+temporary folder before any previous sound is replaced; a decoding failure stops the run without a substitute.
+
+This checkout used the 16.21 game manifest below. `--print-manifest` lists sizes without downloading game content.
+`Common.wad.client` is 100,164,065 bytes. Download only that WAD; do not download a whole League install.
+
+```powershell
+$manifest = 'https://lol.secure.dyn.riotcdn.net/channels/public/releases/BD215C181BAC4F8B.manifest'
+$wadFilter = '^DATA/FINAL/Maps/Shipping/Common\.wad\.client$'
+$gameDir = 'tools/extract-assets/.cache/league/Game'
+& tools/extract-assets/.cache/ManifestDownloader.exe $manifest --no-langs --filter $wadFilter --output $gameDir
+py -3.14 tools/extract-assets/extract_assets.py --league tools/extract-assets/.cache/league --summoner-sounds --vgmstream tools/extract-assets/.cache/vgmstream/vgmstream-cli.exe
+```
+
+For a newer patch, obtain its game manifest from Riot's
+`https://sieve.services.riotcdn.net/api/v1/products/lol/version-sets/NA1?q[platform]=windows`, selecting a
+`lol-game-client` release, and check the required WAD's size again before downloading. The old `live-na-win.json`
+endpoint is stale and must not select a current patch.
+
+Confirm each missing tool before downloading or installing it; confirm the WAD size before downloading it.
+FFmpeg was already installed on this machine. Python 3.14.10, vgmstream r2168 and ManifestDownloader v2.0_fix1 were
+approved separately and placed in `.cache/`; they are developer tools and are not bundled with the app. A portable
+Python's `python314._pth` must include the absolute path to `tools/extract-assets` to import its neighbouring modules.
+Use that Python's executable instead of `py -3.14` when using the portable setup. If extraction fails, report it and
+keep summoner spells silent.
+
 ## Sounds
 
 ```bash
