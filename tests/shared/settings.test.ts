@@ -10,6 +10,12 @@ import {
 import type { AskTrigger } from '../../src/shared/teammate/settings';
 
 describe('normalizeSettings', () => {
+  it('shows all chat categories for old settings and fills damaged entries independently', () => {
+    expect(normalizeSettings({}).chatFilter).toEqual({ text: true, ping: true, scoreboard: true, vote: true, whisper: true });
+    expect(normalizeSettings({ chatFilter: { ping: false, text: 'no', scoreboard: null } }).chatFilter)
+      .toEqual({ text: true, ping: false, scoreboard: true, vote: true, whisper: true });
+  });
+
   it('loads a 0.5.3 settings file with the teammate off', () => {
     const { teammate: _t, features: _f, ...old } = DEFAULT_SETTINGS;
     const s = normalizeSettings({ ...old, features: { emotes: false, rooms: true } });

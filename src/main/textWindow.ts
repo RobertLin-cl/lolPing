@@ -1,3 +1,4 @@
+import type { ChatFilter } from '../shared/chatFilter';
 import { BrowserWindow, ipcMain, screen } from 'electron';
 import { CHAT_MIN_SIZE, placeChat, type ChatBounds } from '../shared/chatBounds';
 import { TEXT_CH, type Point, type TextAnswer, type TextBoxText } from '../shared/ipc';
@@ -13,6 +14,7 @@ export interface ChatWindowDeps {
   submit(raw: string, at: Point): TextAnswer;
   strings(): TextBoxText;
   lines(): readonly HistoryLine[];
+  filter(): ChatFilter;
   /** The other members' names, for Tab after /mute. */
   names(): string[];
   /** Where the window was left, or null for its default spot. */
@@ -58,6 +60,7 @@ export function registerTextWindow(d: ChatWindowDeps): void {
   });
   ipcMain.handle(TEXT_CH.strings, (event): TextBoxText | null => (own(event.sender) && deps ? deps.strings() : null));
   ipcMain.handle(TEXT_CH.lines, (event): HistoryLine[] => (own(event.sender) && deps ? [...deps.lines()] : []));
+  ipcMain.handle(TEXT_CH.filter, (event): ChatFilter | null => (own(event.sender) && deps ? deps.filter() : null));
   ipcMain.handle(TEXT_CH.names, (event): string[] => (own(event.sender) && deps ? deps.names() : []));
   ipcMain.on(TEXT_CH.hover, (event, on: unknown) => {
     if (own(event.sender)) autoHide.setHovered(on === true);
@@ -212,4 +215,10 @@ function setup(w: BrowserWindow): void {
   });
   w.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   loadPage(w, 'text').catch(closeIfAlive);
+}
+
+/** An open chat follows filter changes without bringing a hidden window back. */
+export function chatFilterChanged(): void {
+  const w = textWindow();
+  if (w && deps && !w.webContents.isLoading()) w.webContents.send(TEXT_CH.filterChanged, deps.filter());
 }

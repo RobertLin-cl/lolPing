@@ -1,3 +1,4 @@
+import { CHAT_CATEGORIES } from '../shared/chatFilter';
 import {
   app, clipboard, ClipboardItem, dialog, Menu, nativeImage, powerMonitor, safeStorage, screen, shell, systemPreferences,
 } from 'electron';
@@ -72,7 +73,7 @@ import { SecretStore } from './teammate/secrets';
 import { StaleWatcher } from './teammate/staleWatcher';
 import { UsageLog } from './teammate/usage';
 import { onSettingsWindowGone, openSettingsWindow, settingsWindow } from './settingsWindow';
-import { chatLinesChanged, closeTextWindow, registerTextWindow, showChat, textWindow, typeInChat } from './textWindow';
+import { chatFilterChanged, chatLinesChanged, closeTextWindow, registerTextWindow, showChat, textWindow, typeInChat } from './textWindow';
 import { AppTray, trayUpdateFrom, type TrayMode } from './tray';
 import { trayUpdateHandlers } from './trayUpdate';
 import { MacBackend, RELEASES_API } from './updateMac';
@@ -485,18 +486,20 @@ function start(): void {
     refreshRoster();
     chatLinesChanged();
   });
-  const lineDeps: Pick<RoomTextDeps, 'show' | 'history' | 'now'> = {
+  const lineDeps: Pick<RoomTextDeps, 'show' | 'history' | 'now' | 'filter'> = {
     // The chat window shows the line through the history; it only has to come up for it.
-    show: (p) => {
+    show: (p, visible) => {
       const style = settings.roomTextStyle;
-      if (style === 'window') showChat();
-      else overlays.spawnText({ ...p, style });
+      if (style === 'window') {
+        if (visible) showChat();
+      } else overlays.spawnText({ ...p, style });
     },
     history,
+    filter: () => settings.chatFilter,
     now: Date.now,
   };
   const pingTextDeps: RoomPingTextDeps = {
-    history, text, now: Date.now,
+    history, text, now: Date.now, filter: () => settings.chatFilter,
     enabled: () => enabled && room.state().phase === 'active' && featureOn(settings, 'roomText'),
     style: () => settings.roomTextStyle,
     show: showChat,
@@ -512,9 +515,9 @@ function start(): void {
   });
   /** The member /r answers: the last one who whispered us, as in League. */
   let replyTo: string | null = null;
-  const whispered = (peer: string): void => {
+  const whispered = (peer: string, visible: boolean): void => {
     replyTo = peer;
-    showChat(); // a whisper only shows in the chat window, whatever the text style
+    if (visible) showChat(); // a whisper only shows in the chat window, whatever the text style
   };
   let stopRoomText: (() => void) | null = null;
   const syncRoomText = (): void => {
@@ -540,7 +543,8 @@ function start(): void {
     for (const m of s.members) memberNames.set(m.peer, m.name);
   });
   const panelState = (view: PanelState['view'], vote: PanelState['vote'], voteOver = false): PanelState => ({
-    view, lang: resolveLang(settings.language, app.getLocale()), max: MAX_MEMBERS, room: room.state(), history: history.lines(),
+    view, lang: resolveLang(settings.language, app.getLocale()), max: MAX_MEMBERS, room: room.state(),
+    history: history.lines(), chatFilter: settings.chatFilter,
     vote, voteOver, textOn: featureOn(settings, 'roomText'), votesOn: featureOn(settings, 'roomVotes'),
     volume: soundLevel(settings),
   });
@@ -551,6 +555,9 @@ function start(): void {
   room.on('state', refreshRoster);
   panels.on('action', (a: PanelAction) => {
     switch (a.t) {
+      case 'chatCategory':
+        store.update({ chatFilter: { ...settings.chatFilter, [a.category]: a.on } });
+        break;
       case 'ballot':
         roomVotes?.answer(a.yes);
         break;
@@ -769,6 +776,7 @@ function start(): void {
       };
     },
     lines: () => history.lines(),
+    filter: () => settings.chatFilter,
     names: () => room.state().members.filter((m) => !m.self).map((m) => m.name),
     bounds: () => settings.chatBounds,
     saveBounds: (chatBounds) => void store.update({ chatBounds }),
@@ -1167,6 +1175,10 @@ function start(): void {
   store.on('change', (s: Settings) => {
     const previous = settings;
     settings = s;
+    if (CHAT_CATEGORIES.some((category) => s.chatFilter[category] !== previous.chatFilter[category])) {
+      chatFilterChanged();
+      refreshRoster();
+    }
     sendConfig();
     syncRoomText();
     syncRoomVotes();

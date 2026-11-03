@@ -1,3 +1,4 @@
+import { historyVisible, type ChatFilter } from '../shared/chatFilter';
 import type { Strings } from '../shared/i18n';
 import type { PingId } from '../shared/pings';
 import type { RoomTextStyle } from '../shared/settings';
@@ -8,13 +9,14 @@ import type { RoomHistory } from './roomHistory';
 
 export interface RoomTextDeps {
   room: Pick<RoomManager, 'on' | 'off' | 'state'>;
-  /** Draws a line on the overlay of display `displayId`; the caller adds the text style. */
-  show(p: { displayId: number; x: number; y: number; text: string; owner: string; tag?: PingTag }): void;
+  /** Shows a line in the chosen style; `visible` decides whether it may bring up chat. */
+  show(p: { displayId: number; x: number; y: number; text: string; owner: string; tag?: PingTag }, visible: boolean): void;
   history: RoomHistory;
   text(): Strings;
+  filter(): ChatFilter;
   now(): number;
-  /** A whisper from the member `peer` is in the history: /r answers them now, and the chat window should come up. */
-  whispered(peer: string): void;
+  /** A whisper from the member `peer` is in the history: /r answers them now, and whether it should bring up chat is passed separately. */
+  whispered(peer: string, visible: boolean): void;
 }
 
 export interface RoomLine {
@@ -30,9 +32,11 @@ export interface RoomLine {
 }
 
 /** Shows a line and keeps it in the history: the one path for a member's lines and for ours. */
-export function postLine(deps: Pick<RoomTextDeps, 'show' | 'history' | 'now'>, line: RoomLine): void {
+export function postLine(deps: Pick<RoomTextDeps, 'show' | 'history' | 'now' | 'filter'>, line: RoomLine): void {
   const { kind, tag, text } = line;
-  deps.show({ displayId: line.displayId, x: line.x, y: line.y, text, owner: line.owner, ...(tag ? { tag } : {}) });
+  deps.show({
+    displayId: line.displayId, x: line.x, y: line.y, text, owner: line.owner, ...(tag ? { tag } : {}),
+  }, historyVisible(line, deps.filter()));
   deps.history.push({ at: deps.now(), kind, tag: tag && { name: tag.name, color: tag.color, rgb: tag.rgb }, text });
 }
 
@@ -42,7 +46,7 @@ export function startRoomText(deps: RoomTextDeps): () => void {
   const onWhisper = (w: RemoteWhisper): void => {
     const { name, color, rgb } = w.tag;
     deps.history.push({ at: deps.now(), kind: 'whisperFrom', tag: { name, color, rgb }, text: w.text });
-    deps.whispered(w.peer);
+    deps.whispered(w.peer, historyVisible({ kind: 'whisperFrom' }, deps.filter()));
   };
   const onText = (p: RemoteText): void => {
     const common = { owner: p.peer, tag: p.tag, displayId: p.displayId, x: p.x, y: p.y };
@@ -64,6 +68,7 @@ export function startRoomText(deps: RoomTextDeps): () => void {
 
 export interface RoomPingTextDeps {
   history: RoomHistory;
+  filter(): ChatFilter;
   text(): Strings;
   now(): number;
   enabled(): boolean;
@@ -76,5 +81,5 @@ export function postPing(deps: RoomPingTextDeps, id: PingId, tag: MemberTag): vo
   if (id === 'generic' || !deps.enabled()) return;
   const { name, color, rgb } = tag;
   deps.history.push({ at: deps.now(), kind: 'ping', tag: { name, color, rgb }, text: deps.text().pingLines[id] });
-  if (deps.style() === 'window') deps.show();
+  if (deps.style() === 'window' && historyVisible({ kind: 'ping' }, deps.filter())) deps.show();
 }

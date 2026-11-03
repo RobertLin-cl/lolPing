@@ -4,6 +4,17 @@ import { OVERLAY_CHANNELS, parseMateGlow, parsePanelAction } from '../../src/sha
 const peer = '0123456789abcdef';
 
 describe('parsePanelAction', () => {
+  it('accepts category changes only with a known category and a boolean choice', () => {
+    expect(parsePanelAction({ t: 'chatCategory', category: 'ping', on: false }))
+      .toEqual({ t: 'chatCategory', category: 'ping', on: false });
+    for (const category of ['note', '__proto__', null, 1]) {
+      expect(parsePanelAction({ t: 'chatCategory', category, on: true })).toBeNull();
+    }
+    for (const on of [undefined, null, 'false', 0]) {
+      expect(parsePanelAction({ t: 'chatCategory', category: 'text', on })).toBeNull();
+    }
+  });
+
   it('accepts only well-formed panel actions', () => {
     expect(parsePanelAction({ t: 'alive', peer })).toEqual({ t: 'alive', peer });
     expect(parsePanelAction({ t: 'mute', peer, on: true })).toEqual({ t: 'mute', peer, on: true });

@@ -12,6 +12,15 @@ const savedTagColor = (dir: string, color: number) =>
   vi.waitFor(() => expect(JSON.parse(readFileSync(join(dir, 'settings.json'), 'utf8')).tagColor).toBe(color), { timeout: 3000 });
 
 describe('SettingsStore', () => {
+  it('keeps chat category choices after loading the saved settings again', async () => {
+    const dir = tempDir();
+    const store = new SettingsStore(dir);
+    store.update({ chatFilter: { ...DEFAULT_SETTINGS.chatFilter, ping: false, whisper: false } });
+    await store.flush();
+    expect(new SettingsStore(dir).load().chatFilter)
+      .toEqual({ text: true, ping: false, scoreboard: true, vote: true, whisper: false });
+  });
+
   it('uses defaults when there is no file', () => {
     const store = new SettingsStore(tempDir());
     expect(store.load()).toEqual(DEFAULT_SETTINGS);

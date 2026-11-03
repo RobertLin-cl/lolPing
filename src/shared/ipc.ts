@@ -1,3 +1,4 @@
+import { isChatCategory, type ChatCategory, type ChatFilter } from './chatFilter';
 import type { EmoteArt, EmoteFile, EmoteRef, ImportResult, SoundResult } from './emotes';
 import type { Lang } from './i18n';
 import type { PingId } from './pings';
@@ -126,6 +127,7 @@ export function parseMateGlow(raw: unknown): MateGlow | null {
 export const TEXT_CH = {
   submit: 'text:submit', hide: 'text:hide', strings: 'text:strings', lines: 'text:lines', linesChanged: 'text:linesChanged',
   hover: 'text:hover', names: 'text:names',
+  filter: 'text:filter', filterChanged: 'text:filterChanged',
 } as const;
 
 /** The chat window's words, in the language the app uses. */
@@ -167,6 +169,8 @@ export interface TextApi {
   /** The second Esc, or the title bar's hide button: the window goes away now, and the keyboard back where it was. */
   hide(): void;
   strings(): Promise<TextBoxText | null>;
+  filter(): Promise<ChatFilter | null>;
+  onFilter(cb: (filter: ChatFilter) => void): () => void;
   /** This session's room lines, oldest first. */
   lines(): Promise<HistoryLine[]>;
   /** Called with all the lines again whenever one is added or the room is left. Returns a function that stops it. */
@@ -187,6 +191,7 @@ export interface PanelState {
   max: number;
   room: RoomStateCore;
   history: readonly HistoryLine[];
+  chatFilter: ChatFilter;
   vote: VoteView | null;
   /** The vote's result is in: its widget stays a moment with the buttons off and the countdown stopped. */
   voteOver: boolean;
@@ -199,6 +204,7 @@ export interface PanelState {
 
 /** What a click in a panel window asks for. An `alive` line is placed at the cursor by the app, not by the page. */
 export type PanelAction =
+  | { t: 'chatCategory'; category: ChatCategory; on: boolean }
   | { t: 'alive'; peer: string }
   | { t: 'mute'; peer: string; on: boolean }
   | { t: 'kick'; peer: string }
@@ -218,6 +224,9 @@ export function parsePanelAction(raw: unknown): PanelAction | null {
   const isPeer = (v: unknown): v is string => typeof v === 'string' && PEER_RE.test(v);
   const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
   switch (a.t) {
+    case 'chatCategory':
+      return isChatCategory(a.category) && typeof a.on === 'boolean'
+        ? { t: 'chatCategory', category: a.category, on: a.on } : null;
     case 'alive':
       return isPeer(a.peer) ? { t: 'alive', peer: a.peer } : null;
     case 'mute':

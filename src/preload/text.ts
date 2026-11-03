@@ -6,6 +6,12 @@ const api: TextApi = {
   submit: (text) => ipcRenderer.invoke('text:submit', text),
   hide: () => ipcRenderer.send('text:hide'),
   strings: () => ipcRenderer.invoke('text:strings'),
+  filter: () => ipcRenderer.invoke('text:filter'),
+  onFilter: (cb) => {
+    const handler = (_e: IpcRendererEvent, filter: Parameters<typeof cb>[0]) => cb(filter);
+    ipcRenderer.on('text:filterChanged', handler);
+    return () => ipcRenderer.removeListener('text:filterChanged', handler);
+  },
   lines: () => ipcRenderer.invoke('text:lines'),
   onLines: (cb) => {
     const handler = (_e: IpcRendererEvent, lines: Parameters<typeof cb>[0]) => cb(lines);

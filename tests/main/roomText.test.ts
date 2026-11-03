@@ -1,3 +1,4 @@
+import { DEFAULT_CHAT_FILTER, type ChatFilter } from '../../src/shared/chatFilter';
 import { EventEmitter } from 'node:events';
 import { describe, expect, it } from 'vitest';
 import { RoomHistory } from '../../src/main/roomHistory';
@@ -22,20 +23,23 @@ class FakeRoom extends EventEmitter {
   }
 }
 
-function setup(lang: 'en' | 'zh-CN' = 'en') {
+function setup(lang: 'en' | 'zh-CN' = 'en', filter: ChatFilter = { ...DEFAULT_CHAT_FILTER }) {
   const room = new FakeRoom();
   const history = new RoomHistory();
   const shown: Shown[] = [];
   const whispered: string[] = [];
+  const visibility: boolean[] = [];
+  const whisperVisibility: boolean[] = [];
   const deps: RoomTextDeps = {
     room: room as unknown as RoomTextDeps['room'],
-    show: (p) => shown.push(p),
+    show: (p, visible) => { shown.push(p); visibility.push(visible); },
+    filter: () => filter,
     history,
     text: () => strings(lang),
     now: () => 1234,
-    whispered: (peer) => whispered.push(peer),
+    whispered: (peer, visible) => { whispered.push(peer); whisperVisibility.push(visible); },
   };
-  return { room, history, shown, whispered, deps, stop: startRoomText(deps) };
+  return { room, history, shown, whispered, visibility, whisperVisibility, deps, stop: startRoomText(deps) };
 }
 
 const spoken = (over: Partial<RemoteText>): RemoteText => ({
@@ -99,6 +103,22 @@ describe('startRoomText', () => {
     expect(whispered).toEqual(['alex']);
   });
 
+  it('keeps hidden text and scoreboard lines while marking them not to pop chat', () => {
+    const { room, history, visibility } = setup('en', { ...DEFAULT_CHAT_FILTER, text: false, scoreboard: false });
+    room.emit('remoteText', spoken({}));
+    room.emit('remoteText', spoken({ kind: 'alive', who: 'kim' }));
+    expect(history.lines().map((line) => line.kind)).toEqual(['text', 'alive']);
+    expect(visibility).toEqual([false, false]);
+  });
+
+  it('keeps a hidden whisper and its reply target without popping chat', () => {
+    const { room, history, whispered, whisperVisibility } = setup('en', { ...DEFAULT_CHAT_FILTER, whisper: false });
+    room.emit('whisper', { peer: 'alex', tag: { name: 'Alex', color: 2, rgb: null }, text: 'hi' } satisfies RemoteWhisper);
+    expect(history.lines()[0]).toMatchObject({ kind: 'whisperFrom', text: 'hi' });
+    expect(whispered).toEqual(['alex']);
+    expect(whisperVisibility).toEqual([false]);
+  });
+
   it('stops listening when stopped', () => {
     const { room, shown, history, whispered, stop } = setup();
     stop();
@@ -122,6 +142,13 @@ describe('postLine', () => {
     expect(history.lines()).toEqual([{ at: 1234, kind: 'text', tag: { name: 'Sam', color: 0, rgb: null }, text: 'gg' }]);
   });
 
+  it('marks a hidden vote result not to pop chat while keeping it in history', () => {
+    const { deps, visibility, history } = setup('en', { ...DEFAULT_CHAT_FILTER, vote: false });
+    postLine(deps, { kind: 'vote', owner: 'vote', tag: null, displayId: 3, x: 5, y: 6, text: 'Everyone is ready' });
+    expect(visibility).toEqual([false]);
+    expect(history.lines()[0]).toMatchObject({ kind: 'vote', text: 'Everyone is ready' });
+  });
+
   it('shows a vote result with no name tag and keeps it in the history', () => {
     const { deps, shown, history } = setup();
     postLine(deps, { kind: 'vote', owner: 'vote', tag: null, displayId: 3, x: 5, y: 6, text: 'Everyone is ready' });
@@ -135,7 +162,7 @@ describe('postPing', () => {
     const history = new RoomHistory();
     const shown: number[] = [];
     const deps: RoomPingTextDeps = {
-      history, now: () => 1234, text: () => strings('en'), enabled: () => true, style: () => 'window',
+      history, filter: () => ({ ...DEFAULT_CHAT_FILTER }), now: () => 1234, text: () => strings('en'), enabled: () => true, style: () => 'window',
       show: () => shown.push(history.lines().length), ...over,
     };
     return { deps, history, shown };
@@ -178,6 +205,13 @@ describe('postPing', () => {
       expect(history.lines()).toHaveLength(1);
       expect(shown).toEqual([]);
     }
+  });
+
+  it('records a hidden ping without popping chat', () => {
+    const { deps, history, shown } = setupPing({ filter: () => ({ ...DEFAULT_CHAT_FILTER, ping: false }) });
+    postPing(deps, 'danger', own);
+    expect(history.lines()[0]).toMatchObject({ kind: 'ping', text: 'signals to retreat' });
+    expect(shown).toEqual([]);
   });
 
   it('does not record generic pings or show chat for them', () => {

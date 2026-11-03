@@ -1,3 +1,4 @@
+import { DEFAULT_CHAT_FILTER, normalizeChatFilter, type ChatFilter } from './chatFilter';
 import { normalizeChatBounds, type ChatBounds } from './chatBounds';
 import { DEFAULT_CLICK_EMOTE, DEFAULT_EMOTE_WHEEL } from './emoteCatalog';
 import {
@@ -107,6 +108,8 @@ export interface Settings {
   chatBounds: ChatBounds | null;
   /** Seconds the chat window stays up after the last line, while it doesn't have the pointer or the keyboard. 0 = until hidden. */
   chatHideS: number;
+  /** Categories shown in chat and the room panel history. */
+  chatFilter: ChatFilter;
   /** The AI teammate: its ask key, profiles and history. Used only while features.teammate is on. */
   teammate: TeammateSettings;
 }
@@ -163,6 +166,7 @@ export const DEFAULT_SETTINGS: Settings = {
   roomTextStyle: 'window',
   chatBounds: null,
   chatHideS: 8,
+  chatFilter: { ...DEFAULT_CHAT_FILTER },
   teammate: { ...DEFAULT_TEAMMATE },
 };
 
@@ -404,6 +408,7 @@ export function normalizeSettings(raw: unknown, platform: Platform = 'win', iden
     roomTextStyle: r.roomTextStyle === 'spot' || r.roomTextStyle === 'danmaku' ? r.roomTextStyle : 'window',
     chatBounds: normalizeChatBounds(r.chatBounds),
     chatHideS: num(r.chatHideS, 'chatHideS'),
+    chatFilter: normalizeChatFilter(r.chatFilter),
     teammate: normalizeTeammate(r.teammate, { platform, trigger: pingTrigger, emoteTrigger: emote }),
   };
 }

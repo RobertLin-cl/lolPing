@@ -1,3 +1,4 @@
+import { DEFAULT_CHAT_FILTER } from '../../src/shared/chatFilter';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PanelState } from '../../src/shared/ipc';
 
@@ -71,6 +72,7 @@ const state = (view: PanelState['view']): PanelState => ({
   max: 16,
   room: { phase: 'active', code: null, members: [], lan: 'ok', internet: 'off', lonely: false, clockSkew: false },
   history: [],
+  chatFilter: { ...DEFAULT_CHAT_FILTER },
   vote: view === 'vote' ? { id: 'v1', kind: 'ready', starter: 'a', voters: ['a'], ballots: {}, endsAt: 0 } : null,
   voteOver: false,
   textOn: true,

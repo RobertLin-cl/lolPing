@@ -816,6 +816,7 @@ const en = {
   textBoxCantWhisper: "They can't get whispers",
   chatWhisperTo: 'To',
   chatWhisperFrom: 'From',
+  chatCategories: { text: 'Text', ping: 'Pings', scoreboard: 'Scoreboard', vote: 'Votes', whisper: 'Whispers' },
 
   // room votes
   votesOff: 'Votes are off',
@@ -1606,6 +1607,7 @@ const zh: Strings = {
   textBoxCantWhisper: '对方收不到私聊',
   chatWhisperTo: '发给',
   chatWhisperFrom: '来自',
+  chatCategories: { text: '打字', ping: '信号', scoreboard: '记分板', vote: '投票', whisper: '私聊' },
 
   votesOff: '投票已关闭',
   voteTitleFf: '投降？',
@@ -2390,6 +2392,7 @@ const zhTw: Strings = {
   textBoxCantWhisper: '對方收不到密語',
   chatWhisperTo: '傳給',
   chatWhisperFrom: '來自',
+  chatCategories: { text: '打字', ping: '信號', scoreboard: '記分板', vote: '投票', whisper: '私訊' },
 
   votesOff: '投票已關閉',
   voteTitleFf: '投降？',

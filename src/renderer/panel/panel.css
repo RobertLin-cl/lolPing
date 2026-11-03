@@ -107,6 +107,11 @@ h1, p { margin: 0; }
 .board-head .ff { grid-column: 1; justify-self: start; }
 .board-head .ready { grid-column: 3; justify-self: end; }
 
+.history-filters { flex: none; display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 16px; background: #080e12; }
+.history-filters button { border: 1px solid var(--gold-5); border-radius: 10px; padding: 2px 9px; background: transparent; color: var(--grey-1); font: 12px/18px var(--sans); }
+.history-filters button[aria-pressed="true"] { border-color: var(--gold-3); color: var(--gold-1); background: #243039; }
+.history-filters button:hover, .history-filters button:focus-visible { border-color: var(--gold-1); }
+
 .list { flex: 1; min-height: 0; overflow-y: auto; }
 .list.members { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(var(--rows), 46px); grid-auto-flow: column; }
 /* History is one column: cover the frame's centre line. */

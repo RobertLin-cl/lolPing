@@ -1,3 +1,4 @@
+import { DEFAULT_CHAT_FILTER, historyVisible, type ChatFilter } from '../../shared/chatFilter';
 import type { TextAnswer, TextBoxText } from '../../shared/ipc';
 import { tagColorCss } from '../../shared/roomColors';
 import { historyTime, type HistoryLine } from '../../shared/roomHistory';
@@ -9,6 +10,9 @@ const count = document.getElementById('count') as HTMLElement;
 const hint = document.getElementById('hint') as HTMLElement;
 const log = document.getElementById('log') as HTMLOListElement;
 const title = document.getElementById('title') as HTMLElement;
+let filter: ChatFilter = { ...DEFAULT_CHAT_FILTER };
+let filterReady = false;
+
 const hideButton = document.getElementById('hide') as HTMLButtonElement;
 /** The counter shows in the last 20 code points. */
 const COUNT_FROM = MAX_TEXT - 20;
@@ -35,9 +39,11 @@ let shown: readonly HistoryLine[] = [];
 /** Names and lines come from other members: they only ever go in as text. */
 function showLines(lines: readonly HistoryLine[]): void {
   shown = lines;
+  // Wait for saved choices so hidden lines never flash when the window first opens.
+  if (!filterReady) return;
   // Someone reading older lines keeps their place; otherwise the newest line stays in view.
   const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 8;
-  log.replaceChildren(...lines.map((line) => {
+  log.replaceChildren(...lines.filter((line) => historyVisible(line, filter)).map((line) => {
     const item = document.createElement('li');
     item.className = line.kind;
     const time = document.createElement('span');
@@ -182,3 +188,17 @@ void window.textApi.lines().then((lines) => {
   if (!pushed) showLines(lines);
 });
 requestAnimationFrame(() => input.focus());
+
+let filterPushed = false;
+window.textApi.onFilter((next) => {
+  filterPushed = true;
+  filterReady = true;
+  filter = next;
+  showLines(shown);
+});
+void window.textApi.filter().then((next) => {
+  if (filterPushed) return;
+  filterReady = true;
+  filter = next ?? { ...DEFAULT_CHAT_FILTER };
+  showLines(shown);
+});

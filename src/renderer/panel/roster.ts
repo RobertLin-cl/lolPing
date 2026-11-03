@@ -1,3 +1,4 @@
+import { CHAT_CATEGORIES, historyVisible } from '../../shared/chatFilter';
 import { strings, type Strings } from '../../shared/i18n';
 import type { PanelAction, PanelState } from '../../shared/ipc';
 import type { RoomMember } from '../../shared/room';
@@ -155,6 +156,7 @@ function voteButton(label: string, kind: 'ff' | 'ready', act: (a: PanelAction) =
 /** Draws the room panel on League's Tab scoreboard: the tabs on its cap, the vote buttons in its header, then the players or the history. */
 export function renderRoster(root: HTMLElement, state: PanelState, act: (a: PanelAction) => void): void {
   const t = strings(state.lang);
+  const history = state.history.filter((line) => historyVisible(line, state.chatFilter));
   // Redrawing rebuilds the list: keep where it was scrolled, and keep the history pinned to its newest line.
   const found = root.querySelector<HTMLElement>('.list');
   const before = found?.classList.contains(tab) ? found : null;
@@ -182,15 +184,27 @@ export function renderRoster(root: HTMLElement, state: PanelState, act: (a: Pane
   head.append(el('span', 'code', state.room.code ?? ''));
   if (state.votesOn) head.append(voteButton(t.panelReadyCheck, 'ready', act));
   board.append(head);
+  if (tab === 'history') {
+    const filters = el('div', 'history-filters');
+    for (const category of CHAT_CATEGORIES) {
+      const button = el('button', '', t.chatCategories[category]);
+      button.type = 'button';
+      button.dataset.category = category;
+      button.setAttribute('aria-pressed', String(state.chatFilter[category]));
+      button.addEventListener('click', () => act({ t: 'chatCategory', category, on: !state.chatFilter[category] }));
+      filters.append(button);
+    }
+    board.append(filters);
+  }
   const list = el('div', `list lol-scroll ${tab}`);
   if (tab === 'members') {
     const slots = boardSlots(state.room.members, state.max);
     list.style.setProperty('--rows', String(slots.length / 2));
     for (const m of slots) list.append(m ? memberRow(m, state, t, act) : emptyRow());
-  } else if (state.history.length === 0) {
+  } else if (history.length === 0) {
     list.append(el('div', 'empty', t.panelHistoryEmpty));
   } else {
-    for (const line of state.history) list.append(historyLine(line, t));
+    for (const line of history) list.append(historyLine(line, t));
   }
   board.append(list);
   root.replaceChildren(cap, board);
