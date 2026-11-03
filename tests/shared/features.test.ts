@@ -68,16 +68,27 @@ describe('features', () => {
     expect(roomFeaturesOff({ features: { ...DEFAULT_FEATURES, rooms: false } })).toEqual(['text', 'votes']);
   });
 
+  it('watches spells only on Windows while enabled in an active room with the feature on', () => {
+    const s = { features: { ...DEFAULT_FEATURES, roomSpells: true } };
+    expect(liveKeys(s, { active: true }, true, 'win').spells).toBe(true);
+    for (const platform of ['mac', 'linux'] as const) {
+      expect(liveKeys(s, { active: true }, true, platform).spells).toBe(false);
+    }
+    expect(liveKeys(s, { active: false }, true).spells).toBe(false);
+    expect(liveKeys(s, { active: true }, false).spells).toBe(false);
+    expect(liveKeys({ features: { ...s.features, rooms: false } }, { active: true }, true).spells).toBe(false);
+  });
+
   it('turns the text key on only in an active room with text on', () => {
     const on = { features: DEFAULT_FEATURES };
-    expect(liveKeys(on, { active: true }, true)).toEqual({ text: true, panel: true });
-    expect(liveKeys(on, { active: false }, true)).toEqual({ text: false, panel: false });
-    expect(liveKeys(on, { active: true }, false)).toEqual({ text: false, panel: false });
+    expect(liveKeys(on, { active: true }, true)).toEqual({ text: true, panel: true, spells: false });
+    expect(liveKeys(on, { active: false }, true)).toEqual({ text: false, panel: false, spells: false });
+    expect(liveKeys(on, { active: true }, false)).toEqual({ text: false, panel: false, spells: false });
     expect(liveKeys({ features: { ...DEFAULT_FEATURES, roomText: false } }, { active: true }, true))
-      .toEqual({ text: false, panel: true });
+      .toEqual({ text: false, panel: true, spells: false });
     expect(liveKeys({ features: { ...DEFAULT_FEATURES, roomPanel: false } }, { active: true }, true))
-      .toEqual({ text: true, panel: false });
+      .toEqual({ text: true, panel: false, spells: false });
     expect(liveKeys({ features: { ...DEFAULT_FEATURES, rooms: false } }, { active: true }, true))
-      .toEqual({ text: false, panel: false });
+      .toEqual({ text: false, panel: false, spells: false });
   });
 });

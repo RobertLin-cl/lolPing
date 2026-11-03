@@ -569,6 +569,135 @@ static void test_nothing_is_live_before_the_first_config() {
   CHECK(!r.swallow && findEmit(r, Emit::Kind::Panel) == nullptr);
 }
 
+static Decision withSummoners() {
+  Config c;
+  c.summonerKeys = true;
+  Decision d;
+  d.setSummonerKeysSupported(true);
+  d.setConfig(c);
+  return d;
+}
+
+static void test_summoner_keys_observe_once_and_pass_every_down_and_up() {
+  Decision d = withSummoners();
+  for (const uint32_t vk : {0x44u, 0x46u}) {
+    const Result down = d.onEvent(kd(vk));
+    const Emit* spell = findEmit(down, Emit::Kind::SummonerCast);
+    CHECK(spell != nullptr && spell->spellSlot == (vk == 0x44 ? 'd' : 'f'));
+    CHECK(!down.swallow && down.injects.empty());
+    for (int i = 0; i < 4; ++i) {
+      const Result repeat = d.onEvent(kd(vk));
+      CHECK(!repeat.swallow && repeat.injects.empty() && repeat.emits.empty());
+    }
+    const Result up = d.onEvent(ku(vk));
+    CHECK(!up.swallow && up.injects.empty() && up.emits.empty());
+    CHECK(findEmit(d.onEvent(kd(vk)), Emit::Kind::SummonerCast) != nullptr);
+    d.onEvent(ku(vk));
+  }
+}
+
+static void test_summoner_keys_need_windows_support_feature_and_enabled_input() {
+  Config c;
+  c.summonerKeys = true;
+  Decision unsupported;
+  unsupported.setConfig(c);
+  CHECK(unsupported.onEvent(kd(0x44)).emits.empty());
+  Decision off = withSummoners();
+  c.summonerKeys = false;
+  off.setConfig(c);
+  Result r = off.onEvent(kd(0x44));
+  CHECK(!r.swallow && r.emits.empty() && r.injects.empty());
+  Decision paused = withSummoners();
+  paused.setEnabled(false);
+  r = paused.onEvent(kd(0x46));
+  CHECK(!r.swallow && r.emits.empty() && r.injects.empty());
+  Decision typing = withSummoners();
+  typing.setSuspended(true);
+  r = typing.onEvent(kd(0x44));
+  CHECK(!r.swallow && findEmit(r, Emit::Kind::SummonerCast) != nullptr && r.injects.empty());
+  InputEvent injected = kd(0x46);
+  injected.selfInjected = true;
+  CHECK(typing.onEvent(injected).emits.empty());
+}
+
+static void test_summoner_keys_ignore_modifiers_and_fullscreen_apps() {
+  for (const uint32_t mod : {CTRL, ALT, WIN, 0xA0u}) {
+    Decision d = withSummoners();
+    d.onEvent(kd(mod));
+    const Result r = d.onEvent(kd(0x44));
+    CHECK(!r.swallow && r.emits.empty() && r.injects.empty());
+  }
+  Decision d = withSummoners();
+  Config c;
+  c.summonerKeys = true;
+  c.gameCheck = true;
+  d.setConfig(c);
+  d.setFullscreenProbe([](int, int) { return true; });
+  Result r = d.onEvent(kd(0x46));
+  CHECK(!r.swallow && r.emits.empty() && r.injects.empty());
+  d.onEvent(ku(0x46));
+  c.gameCheck = false;
+  d.setConfig(c);
+  r = d.onEvent(kd(0x46));
+  CHECK(!r.swallow && findEmit(r, Emit::Kind::SummonerCast) != nullptr);
+}
+
+static void test_summoner_keys_yield_to_existing_key_bindings() {
+  Decision d = withSummoners();
+  Config c;
+  c.summonerKeys = true;
+  c.trigger = Trigger::CustomVk;
+  c.triggerVk = 0x44;
+  d.setConfig(c);
+  Result r = d.onEvent(kd(0x44));
+  CHECK(r.swallow && findEmit(r, Emit::Kind::SummonerCast) == nullptr);
+  d.onEvent(ku(0x44));
+  c.trigger = Trigger::Alt;
+  c.panelVk = 0x46;
+  d.setConfig(c);
+  r = d.onEvent(kd(0x46));
+  CHECK(!r.swallow && findEmit(r, Emit::Kind::Panel) != nullptr);
+  CHECK(findEmit(r, Emit::Kind::SummonerCast) == nullptr);
+}
+
+static void test_summoner_keys_keep_typing_order_and_do_not_cast_on_a_held_key_after_enabling() {
+  Decision d = withSummoners();
+  Config c;
+  c.summonerKeys = true;
+  c.trigger = Trigger::CustomVk;
+  c.triggerVk = KEY_V;
+  d.setConfig(c);
+  CHECK(d.onEvent(kd(KEY_V)).swallow);
+  const Result typed = d.onEvent(kd(0x44));
+  CHECK(typed.swallow && typed.injects.size() == 2);
+  CHECK(typed.injects[0].vk == KEY_V && typed.injects[1].vk == 0x44);
+  CHECK(findEmit(typed, Emit::Kind::SummonerCast) != nullptr);
+  d.onEvent(ku(KEY_V));
+  d.onEvent(ku(0x44));
+  c.trigger = Trigger::Alt;
+  c.summonerKeys = false;
+  d.setConfig(c);
+  CHECK(d.onEvent(kd(0x46)).emits.empty());
+  c.summonerKeys = true;
+  d.setConfig(c);
+  const Result repeat = d.onEvent(kd(0x46));
+  CHECK(!repeat.swallow && repeat.emits.empty() && repeat.injects.empty());
+  d.onEvent(ku(0x46));
+  CHECK(findEmit(d.onEvent(kd(0x46)), Emit::Kind::SummonerCast) != nullptr);
+}
+
+static void test_summoner_config_and_output() {
+  const Command c = parseCommand(R"({"type":"config","summonerKeys":true})", Config{});
+  CHECK(c.kind == Command::Kind::Config && c.config.summonerKeys);
+  CHECK(parseCommand(R"({"type":"config"})", c.config).config.summonerKeys);
+  CHECK(!parseCommand(R"({"type":"config","summonerKeys":false})", c.config).config.summonerKeys);
+  CHECK(!Config{}.summonerKeys);
+  Emit e{Emit::Kind::SummonerCast};
+  CHECK(formatEmit(e) == R"({"type":"summonerCast","slot":"d"})");
+  e.spellSlot = 'f';
+  CHECK(formatEmit(e) == R"({"type":"summonerCast","slot":"f"})");
+}
+
 static Decision withPanel(uint32_t panelVk = TAB) {
   Config c;
   c.panelVk = panelVk;
@@ -1992,6 +2121,12 @@ int main() {
   test_text_hotkey_needs_its_modifier();
   test_text_hotkey_shares_its_key_with_a_custom_emote_key();
   test_nothing_is_live_before_the_first_config();
+  test_summoner_keys_observe_once_and_pass_every_down_and_up();
+  test_summoner_keys_need_windows_support_feature_and_enabled_input();
+  test_summoner_keys_ignore_modifiers_and_fullscreen_apps();
+  test_summoner_keys_yield_to_existing_key_bindings();
+  test_summoner_keys_keep_typing_order_and_do_not_cast_on_a_held_key_after_enabling();
+  test_summoner_config_and_output();
   test_panel_key_shows_on_press_and_hides_on_release();
   test_panel_key_with_modifier_passes();
   test_panel_key_passes_over_fullscreen_game();

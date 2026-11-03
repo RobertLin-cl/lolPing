@@ -19,6 +19,7 @@ std::string formatEmit(const Emit& e) {
     case Emit::Kind::Toggled: return std::string("{\"type\":\"toggled\",\"enabled\":") + (e.enabled ? "true" : "false") + "}";
     case Emit::Kind::TextRequested: return "{\"type\":\"textRequested\"}";
     case Emit::Kind::Panel: return std::string("{\"type\":\"panel\",\"show\":") + (e.show ? "true" : "false") + "}";
+    case Emit::Kind::SummonerCast: return std::string("{\"type\":\"summonerCast\",\"slot\":\"") + e.spellSlot + "\"}";
     case Emit::Kind::TriggerUp: return std::string("{\"type\":\"triggerUp\",\"wheel\":\"") + wheel + "\"}";
     case Emit::Kind::AskWords: return "{\"type\":\"askWords\",\"x\":" + std::to_string(e.x) + ",\"y\":" + std::to_string(e.y) + "}";
     case Emit::Kind::Scroll: return "{\"type\":\"scroll\",\"x\":" + std::to_string(e.x) + ",\"y\":" + std::to_string(e.y) + "}";
@@ -45,8 +46,8 @@ void Output::line(std::string s) {
 
 void Output::emit(const Emit& e) { line(formatEmit(e)); }
 
-// Version 6: the config takes askDoubleTap; askWords and scroll events and the staleWatch command are new.
-void Output::ready() { line("{\"type\":\"ready\",\"version\":7}"); }
+// Version 8 adds passive Windows summoner keys and summonerCast events.
+void Output::ready() { line("{\"type\":\"ready\",\"version\":8}"); }
 
 void Output::error(const std::string& message) { line("{\"type\":\"error\",\"message\":\"" + jsonEscape(message) + "\"}"); }
 

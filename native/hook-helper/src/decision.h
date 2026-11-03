@@ -53,6 +53,7 @@ struct Config {
   uint32_t textMods = ModCtrl | ModAlt;
   uint32_t textVk = 0;
   uint32_t panelVk = 0;  // held with no modifier to show the room panel; the app gets its press and release, not its repeats
+  bool summonerKeys = false;  // observe bare D/F while the room feature is live
   bool enabled = true;
 };
 
@@ -61,12 +62,13 @@ struct Emit {
   // released after its key. AskWords: a double tap of the ask key, at the pointer. Scroll: the wheel turned
   // while the stale watch is on, at the pointer.
   enum class Kind {
-    WheelOpen, WheelMove, WheelRelease, Click, Cancel, Toggled, TextRequested, Panel, TriggerUp, AskWords, Scroll
+    WheelOpen, WheelMove, WheelRelease, Click, Cancel, Toggled, TextRequested, Panel, SummonerCast, TriggerUp, AskWords, Scroll
   } kind;
   int x = 0;
   int y = 0;
   WheelKind wheel = WheelKind::Ping;  // point events and TriggerUp: the wheel whose trigger started the gesture
   bool enabled = false;               // Toggled only
+  char spellSlot = 'd';              // SummonerCast only
   bool show = false;                  // Panel only
 };
 
@@ -105,6 +107,8 @@ class Decision {
   Result tick(uint64_t nowMs);
   // Per platform: does a fullscreen app own the screen under the click at (x, y)? Unset: gameCheck never fires.
   void setFullscreenProbe(std::function<bool(int x, int y)> probe);
+  // Only the Windows hook enables passive summoner key observation.
+  void setSummonerKeysSupported(bool on) { summonerKeysSupported_ = on; }
   // Windows opens the menu bar / Start menu on a lone Alt / Win key-up, so a swallowed press while one is held
   // gets a mask key before that key-up. macOS has no such behaviour: its hook layer turns this off.
   void setMaskMenuKeys(bool on) { maskMenuKeys_ = on; }
@@ -172,6 +176,7 @@ class Decision {
   bool suspended_ = false;
   std::function<bool(int x, int y)> fullscreenProbe_;
   State state_ = State::Idle;
+  bool summonerKeysSupported_ = false;
   std::array<bool, 256> keyDown_{};
   std::set<uint32_t> swallowKeyUps_;
   bool swallowRightUp_ = false;

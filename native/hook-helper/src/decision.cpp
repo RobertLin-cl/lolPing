@@ -437,6 +437,14 @@ void Decision::onKeyDown(const InputEvent& e, Result& r) {
   }
   // This down passes through, so any pending up-swallow for the key is stale (its up was lost): drop it.
   swallowKeyUps_.erase(vk);
+  // Passive observation stays live while a text box suspends gestures; claimed keys above keep their old behavior.
+  if (summonerKeysSupported_ && enabled_ && cfg_.summonerKeys && !repeat && mods() == 0 &&
+      (vk == 0x44 || vk == 0x46) && !isAnyTriggerVk(vk) &&
+      !(cfg_.gameCheck && fullscreenProbe_ && fullscreenProbe_(lastX_, lastY_))) {
+    Emit spell{Emit::Kind::SummonerCast};
+    spell.spellSlot = vk == 0x44 ? 'd' : 'f';
+    r.emits.push_back(spell);
+  }
 }
 
 void Decision::onKeyUp(const InputEvent& e, Result& r) {

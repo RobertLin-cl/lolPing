@@ -52,6 +52,15 @@ describe('parseHelperLine', () => {
     }
   });
 
+  it('accepts only D and F summoner slots', () => {
+    for (const slot of ['d', 'f']) {
+      expect(parseHelperLine(JSON.stringify({ type: 'summonerCast', slot }))).toEqual({ type: 'summonerCast', slot });
+    }
+    for (const slot of [undefined, 'D', 'x', 0, null, {}]) {
+      expect(parseHelperLine(JSON.stringify({ type: 'summonerCast', slot }))).toBeNull();
+    }
+  });
+
   it('rejects malformed lines', () => {
     for (const line of ['', 'nope', '42', 'null', '{"type":"wheelOpen","x":1}', '{"type":"click","x":1.5,"y":2}',
       '{"type":"toggled"}', '{"type":"panel"}', '{"type":"panel","show":"yes"}', '{"type":"mystery"}', '{"x":1,"y":2}']) {
@@ -66,8 +75,17 @@ describe('commands', () => {
       type: 'config', trigger: 'alt', triggerVk: 0, clickPing: false, gameCheck: true,
       emoteTrigger: 'ctrl', emoteTriggerVk: 0, emoteClick: false, askTrigger: 'off', askTriggerVk: 0, askClick: false,
       askDoubleTap: false, dragThresholdPx: 8,
-      toggleMods: 3, toggleVk: 0x50, textMods: 1, textVk: 0, panelVk: 0, enabled: true,
+      toggleMods: 3, toggleVk: 0x50, textMods: 1, textVk: 0, panelVk: 0, summonerKeys: false, enabled: true,
     });
+  });
+
+  it('watches spells only when the feature, input and live room gate allow them', () => {
+    const s = { ...DEFAULT_SETTINGS, features: { ...DEFAULT_FEATURES, roomSpells: true } };
+    const live = { text: false, panel: false, spells: true };
+    expect(configCommand(s, true, live)).toMatchObject({ summonerKeys: true });
+    expect(configCommand(s, false, live)).toMatchObject({ summonerKeys: false });
+    expect(configCommand(DEFAULT_SETTINGS, true, live)).toMatchObject({ summonerKeys: false });
+    expect(configCommand(s, true)).toMatchObject({ summonerKeys: false });
   });
 
   it('sends textVk 0 outside a room', () => {

@@ -47,6 +47,7 @@ import {
 } from './paths';
 import { deriveRoomKeys } from './roomCrypto';
 import { RoomHistory } from './roomHistory';
+import { SummonerSession } from './summonerSession';
 import { PanelHold } from './panelHold';
 import { PanelWindows } from './panelWindows';
 import { MAX_MEMBERS, RoomManager, type RoomToast } from './roomManager';
@@ -460,16 +461,24 @@ function start(): void {
     hide: () => panels.hideRoster(),
   });
   // The room keys (the text shortcut and the panel key) are the helper's only while a room is active.
-  let live = liveKeys(settings, { active: false }, enabled);
+  const summoners = new SummonerSession(Date.now);
+  const syncSummoners = (): void => {
+    const state = room.state();
+    summoners.sync(settings, PLATFORM === 'win' && state.phase === 'active' && featureOn(settings, 'roomSpells')
+      ? state.code : null);
+  };
+  let live = liveKeys(settings, { active: false }, enabled, PLATFORM);
   const sendConfig = (): void => {
-    live = liveKeys(settings, { active: room.state().phase === 'active' }, enabled);
+    syncSummoners();
+    live = liveKeys(settings, { active: room.state().phase === 'active' }, enabled, PLATFORM);
     // The helper stops reporting a held panel key once it is off, so the roster would stay up: hide it here.
     if (!live.panel) panelHold.up();
     bridge.send(configCommand(effective(settings), enabled, live));
   };
   room.on('state', () => {
-    const next = liveKeys(settings, { active: room.state().phase === 'active' }, enabled);
-    if (next.text !== live.text || next.panel !== live.panel) sendConfig();
+    syncSummoners();
+    const next = liveKeys(settings, { active: room.state().phase === 'active' }, enabled, PLATFORM);
+    if (next.text !== live.text || next.panel !== live.panel || next.spells !== live.spells) sendConfig();
   });
   overlays.on('displays', pushRoom);
   room.on('remoteEmote', (p) => {
@@ -801,7 +810,10 @@ function start(): void {
   bridge.on('event', (ev) => {
     if (ev.type === 'toggled') setEnabled(ev.enabled);
     else if (ev.type === 'textRequested') openText();
-    else if (ev.type === 'panel') {
+    else if (ev.type === 'summonerCast') {
+      syncSummoners();
+      summoners.cast(ev.slot, live.spells && enabled && !capturing);
+    } else if (ev.type === 'panel') {
       if (ev.show) panelHold.down();
       else panelHold.up();
     } else if (ev.type === 'ready') {

@@ -438,7 +438,19 @@ panel feature is not required. Both slots open one shared League-style icon grid
 checkmark and their D/F key. Picking the other slot's spell swaps D and F in one settings update
 (`selectSummonerSpell`); picking the current spell leaves the pair unchanged. Options also grey out while paused
 or after helper failure, and the sound row greys out under global mute. Mute room does not grey local spell choices or sounds. English, Simplified Chinese and Traditional Chinese names come from
-CommunityDragon. Input, presence and panel wiring are added separately.
+CommunityDragon. Presence, panel display and sound playback are added separately.
+
+Windows enables passive summoner key support in its hook layer; macOS and Linux never enable it. The helper's
+version 8 config adds `summonerKeys`, set only while the feature is on in an active room and lolPing is enabled.
+It reports `summonerCast {slot: 'd' | 'f'}` once per bare physical key press. Repeats and key-up always pass
+through, as does the initial press. Self-injected keys, modified chords, fullscreen apps with `gameCheck` on,
+and keys already claimed by a wheel, text shortcut or panel do not cast. Passive observation stays on while
+text input suspends gestures, so typing can cast too. Main ignores casts during settings key capture.
+
+`src/main/summonerSession.ts` applies accepted events to the shared cooldown logic with injected time.
+The state is local and in memory for now: leave, feature off, room change, spell change and app restart reset
+both slots. Pausing input and restarting the helper keep cooldowns. Room mute does not stop local casts.
+Casting emits no chat line and has no visible panel or sound effect yet.
 
 ### Whispers (this fork)
 
@@ -508,7 +520,7 @@ You ping something with the ask wheel and an AI teammate answers at that spot: a
 
 ### Input: the ask wheel, words, several spots
 
-The helper protocol is §5.3's, at `HELPER_VERSION` 6 (7 in this fork adds `activate`).
+The helper protocol is §5.3's, at `HELPER_VERSION` 8 in this fork (7 adds `activate`; 8 adds passive summoner keys).
 
 - **Ask wheel:** `WheelKind` gains `'ask'`, and `config` gains `askTrigger`, `askTriggerVk`, `askClick` and `askDoubleTap`. The ask key works like the emote key (§13): drag for the wheel, click for the words box, the mask key after a swallowed Win or Alt (§5.2), a lone Win tap still opens Start, a custom key types on a lone tap, and on Windows a fullscreen app with `gameCheck` on blocks it. The ask wheel uses the ping wheel's layout (`settings.wheel`); Generic is the click, never a slice.
 - **Same key (`'same'`):** the helper gets `askTrigger: 'off'` and reports ping-wheel gestures as before. Main treats a ping-wheel release whose ping has an enabled intent as an ask, draws that ping locally and sends nothing to the room; a slice whose intent is switched off stays a normal ping. Settings says "Your pings go to the teammate only."

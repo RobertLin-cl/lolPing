@@ -1,4 +1,5 @@
 import { featureOn } from './features';
+import type { SummonerSpellSlot } from './summonerSpells';
 import type { Settings } from './settings';
 import { canDoubleTap } from './teammate/settings';
 
@@ -8,8 +9,9 @@ export type WheelKind = 'ping' | 'emote' | 'ask';
 /**
  * The helper's `ready` version this build expects. 5: the ask key, `"wheel":"ask"` and `triggerUp`.
  * 6 adds `askWords`, `scroll`, the `askDoubleTap` config field and the `staleWatch` command. 7 adds `activate`.
+ * 8 adds the Windows `summonerKeys` config and passive `summonerCast` events.
  */
-export const HELPER_VERSION = 7;
+export const HELPER_VERSION = 8;
 
 /**
  * Messages the hook helper writes to stdout, one JSON object per line.
@@ -22,6 +24,7 @@ export type HelperEvent =
   | { type: 'toggled'; enabled: boolean }
   | { type: 'textRequested' }
   | { type: 'panel'; show: boolean }
+  | { type: 'summonerCast'; slot: SummonerSpellSlot }
   /** A wheel's trigger key came up after a release or click while held, or right after a release it was let go before. */
   | { type: 'triggerUp'; wheel: WheelKind }
   /** The ask key was double-tapped: open the words box here. */
@@ -62,6 +65,8 @@ export function parseHelperLine(line: string): HelperEvent | null {
       return { type: 'textRequested' };
     case 'panel':
       return typeof o.show === 'boolean' ? { type: 'panel', show: o.show } : null;
+    case 'summonerCast':
+      return o.slot === 'd' || o.slot === 'f' ? { type: 'summonerCast', slot: o.slot } : null;
     case 'triggerUp':
       return isWheel(o.wheel) ? { type: 'triggerUp', wheel: o.wheel } : null;
     case 'askWords':
@@ -110,6 +115,7 @@ export type HelperCommand =
       textMods: number;
       textVk: number;
       panelVk: number;
+      summonerKeys: boolean;
       enabled: boolean;
     }
   | { type: 'setEnabled'; enabled: boolean }
@@ -127,7 +133,7 @@ export type HelperCommand =
 export function configCommand(
   s: Settings,
   enabled: boolean,
-  live: { text: boolean; panel: boolean } = { text: false, panel: false },
+  live: { text: boolean; panel: boolean; spells?: boolean } = { text: false, panel: false },
 ): HelperCommand {
   const t = s.trigger;
   // With the Emotes feature off the helper gets no emote key, so no emote wheel or emote click.
@@ -156,6 +162,7 @@ export function configCommand(
     textMods: s.textHotkey.mods,
     textVk: live.text ? s.textHotkey.vk : 0,
     panelVk: live.panel ? s.panelKey : 0,
+    summonerKeys: enabled && live.spells === true && featureOn(s, 'roomSpells'),
     enabled,
   };
 }

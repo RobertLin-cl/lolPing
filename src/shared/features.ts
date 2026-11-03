@@ -58,7 +58,11 @@ export function liveKeys(
   s: { features: Features },
   room: { active: boolean },
   enabled: boolean,
-): { text: boolean; panel: boolean } {
+  platform: Platform = 'win',
+): { text: boolean; panel: boolean; spells: boolean } {
   const live = enabled && room.active;
-  return { text: live && featureOn(s, 'roomText'), panel: live && featureOn(s, 'roomPanel') };
+  return {
+    text: live && featureOn(s, 'roomText'), panel: live && featureOn(s, 'roomPanel'),
+    spells: platform === 'win' && live && featureOn(s, 'roomSpells'),
+  };
 }
