@@ -28,7 +28,7 @@ import { WheelEditor, type PoolItem } from './components/WheelEditor';
 import { TextContext, useText } from './text';
 import { macDarkTheme, macLightTheme } from './macTheme';
 import { greyedRows } from './greyedRows';
-import { barFrames } from './navIndicator';
+import { barFrames, sectionAt } from './navIndicator';
 import { useAppState, type Update } from './useAppState';
 import { useUpdateState } from './useUpdateState';
 
@@ -159,12 +159,8 @@ function SettingsPage({ settings: s, status, update }: { settings: Settings; sta
   const onScroll = () => {
     const main = mainRef.current;
     if (!main || jumping.current) return;
-    let current = sections[0].id;
-    for (const sec of sections) {
-      const el = document.getElementById(sec.id);
-      if (el && el.offsetTop - main.offsetTop - 40 <= main.scrollTop) current = sec.id;
-    }
-    setActive(current);
+    const tops = sections.map((sec) => (document.getElementById(sec.id)?.offsetTop ?? Infinity) - main.offsetTop);
+    setActive(sections[sectionAt(tops, main.scrollTop, main.scrollHeight - main.clientHeight)].id);
   };
 
   return (

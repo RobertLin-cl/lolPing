@@ -14,3 +14,19 @@ export function barFrames(from: number, to: number, size: number): BarFrame[] {
     { top: px(to), height: px(size) },
   ];
 }
+
+/** How far below the top of the page a section's heading may sit and still count as the section being read, in px. */
+const READ_LINE = 40;
+
+/**
+ * Which section the nav selects at `scrollTop`: the last one whose top (in px from the top of the content) has reached
+ * the reading line. At the very bottom it is the last section, which may be too short for its top to get there.
+ */
+export function sectionAt(tops: readonly number[], scrollTop: number, maxScroll: number): number {
+  if (maxScroll > 0 && scrollTop >= maxScroll - 1) return tops.length - 1;
+  let at = 0;
+  tops.forEach((top, i) => {
+    if (top - READ_LINE <= scrollTop) at = i;
+  });
+  return at;
+}
