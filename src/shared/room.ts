@@ -1,4 +1,5 @@
 import type { TagRgb } from './roomColors';
+import type { SummonerState } from './summonerSpells';
 import type { MemberStatus } from './roomProtocol';
 
 export type TransportStatus = 'off' | 'starting' | 'ok' | 'unavailable';
@@ -25,6 +26,8 @@ export interface RoomMember {
   /** Muted by us, for this session. */
   muted: boolean;
   self: boolean;
+  /** Missing on old peers and while local casting is off: show the default ready pair. */
+  spells?: SummonerState;
 }
 
 export interface RoomStateCore {

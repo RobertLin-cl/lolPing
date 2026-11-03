@@ -1,13 +1,12 @@
 import type { Settings } from '../shared/settings';
-import { castSpell, createSpellCooldown, type SpellCooldown, type SummonerSpellSlot } from '../shared/summonerSpells';
+import { castSpell, createSpellCooldown, type SummonerState, type SummonerSpellSlot } from '../shared/summonerSpells';
 
 type Selection = Pick<Settings, 'summonerD' | 'summonerF'>;
-export type SummonerCooldowns = Readonly<Record<SummonerSpellSlot, SpellCooldown>>;
 
 /** Keeps local cooldowns for one room session; pausing input does not restart them. */
 export class SummonerSession {
   private room: string | null = null;
-  private cooldowns: SummonerCooldowns | null = null;
+  private cooldowns: SummonerState | null = null;
 
   constructor(private readonly now: () => number) {}
 
@@ -24,7 +23,7 @@ export class SummonerSession {
     this.room = room;
   }
 
-  state(): SummonerCooldowns | null { return this.cooldowns; }
+  state(): SummonerState | null { return this.cooldowns; }
 
   cast(slot: SummonerSpellSlot, enabled: boolean): boolean {
     if (!enabled || !this.cooldowns) return false;

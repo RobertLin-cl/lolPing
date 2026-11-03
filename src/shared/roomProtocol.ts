@@ -1,4 +1,6 @@
 import { ANNOUNCED_MAX, HASH_RE, isEmoteFx, isEmoteRefShape, type EmoteRef } from './emotes';
+import { validateSpellCooldown, validateSummonerState } from './summonerProtocol';
+import type { SpellCooldown, SummonerSpellSlot, SummonerState } from './summonerSpells';
 import { isPingId, type PingId } from './pings';
 import { isTagColor, isTagRgb, type TagRgb } from './roomColors';
 
@@ -43,6 +45,8 @@ export interface PresenceMsg extends Base {
   pk?: string;
   /** Added after 0.6.1: the X25519 key whispers to this peer are sealed to, raw, in base64. Only a signed presence's counts. */
   xk?: string;
+  /** Added in 0.6.5: absent when local spell casting is off; older apps ignore it. */
+  spells?: SummonerState;
 }
 export interface PingMsg extends Base {
   t: 'ping';
@@ -76,6 +80,16 @@ export interface TextMsg extends Base {
 export interface AliveMsg extends Base {
   t: 'alive';
   who: string;
+  d: number;
+  x: number;
+  y: number;
+}
+/** A panel spell click carries the state at click time; older apps drop this unknown type. */
+export interface SpellMsg extends Base {
+  t: 'spell';
+  who: string;
+  slot: SummonerSpellSlot;
+  cooldown: SpellCooldown;
   d: number;
   x: number;
   y: number;
@@ -128,7 +142,7 @@ export interface WhisperMsg extends Base {
   b: string;
 }
 export type RoomMessage =
-  PresenceMsg | PingMsg | EmoteMsg | TextMsg | AliveMsg | VoteMsg | BallotMsg | WantMsg | ChunkMsg | ByeMsg | WhisperMsg;
+  PresenceMsg | PingMsg | EmoteMsg | TextMsg | AliveMsg | SpellMsg | VoteMsg | BallotMsg | WantMsg | ChunkMsg | ByeMsg | WhisperMsg;
 
 // C0/C1 controls, zero-width characters, bidi marks, embeddings and isolates, BOM, line/paragraph separators,
 // soft hyphen, combining grapheme joiner, Arabic letter mark, Mongolian vowel separator and the Hangul fillers
@@ -210,8 +224,10 @@ export function validateMessage(raw: unknown): RoomMessage | null {
       const { proto, app, name, color, rgb, status, em, nf, pk, xk } = raw;
       if (!isUint(proto) || typeof app !== 'string' || app.length > MAX_APP_VERSION || typeof name !== 'string') return null;
       if (!isTagColor(color) || !STATUSES.includes(status as MemberStatus)) return null;
+      const spells = validateSummonerState(raw.spells, ts);
       const presence: PresenceMsg = {
         t, ...base, proto, app, name: sanitizeName(name.slice(0, 256)), color, status: status as MemberStatus,
+        ...(spells ? { spells } : {}),
         em: emList(em), nf: nfList(nf), ...(typeof pk === 'string' && PK_RE.test(pk) ? { pk } : {}),
         ...(typeof xk === 'string' && PK_RE.test(xk) ? { xk } : {}),
       };
@@ -244,6 +260,13 @@ export function validateMessage(raw: unknown): RoomMessage | null {
       if (typeof who !== 'string' || !PEER_RE.test(who)) return null;
       if (!Number.isInteger(d) || (d as number) < 1 || (d as number) > MAX_DISPLAY || !isUnit(x) || !isUnit(y)) return null;
       return { t, ...base, who, d: d as number, x, y };
+    }
+    case 'spell': {
+      const { who, slot, d, x, y } = raw;
+      const cooldown = validateSpellCooldown(raw.cooldown, ts);
+      if (typeof who !== 'string' || !PEER_RE.test(who) || (slot !== 'd' && slot !== 'f') || !cooldown) return null;
+      if (!Number.isInteger(d) || (d as number) < 1 || (d as number) > MAX_DISPLAY || !isUnit(x) || !isUnit(y)) return null;
+      return { t, ...base, who, slot, cooldown, d: d as number, x, y };
     }
     case 'vote': {
       const { id, kind, target } = raw;
@@ -302,7 +325,7 @@ export function isOlderThan(app: string, version: string): boolean {
 }
 
 export function encodeMessage(m: RoomMessage): Uint8Array {
-  const out = m.t === 'ping' || m.t === 'emote' || m.t === 'text' || m.t === 'alive' ? { ...m, x: round4(m.x), y: round4(m.y) } : m;
+  const out = m.t === 'ping' || m.t === 'emote' || m.t === 'text' || m.t === 'alive' || m.t === 'spell' ? { ...m, x: round4(m.x), y: round4(m.y) } : m;
   return new TextEncoder().encode(JSON.stringify(out));
 }
 

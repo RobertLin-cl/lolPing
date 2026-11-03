@@ -438,7 +438,7 @@ panel feature is not required. Both slots open one shared League-style icon grid
 checkmark and their D/F key. Picking the other slot's spell swaps D and F in one settings update
 (`selectSummonerSpell`); picking the current spell leaves the pair unchanged. Options also grey out while paused
 or after helper failure, and the sound row greys out under global mute. Mute room does not grey local spell choices or sounds. English, Simplified Chinese and Traditional Chinese names come from
-CommunityDragon. Presence, panel display and sound playback are added separately.
+CommunityDragon. Panel display and sound playback are added separately.
 
 Windows enables passive summoner key support in its hook layer; macOS and Linux never enable it. The helper's
 version 8 config adds `summonerKeys`, set only while the feature is on in an active room and lolPing is enabled.
@@ -448,9 +448,28 @@ and keys already claimed by a wheel, text shortcut or panel do not cast. Passive
 text input suspends gestures, so typing can cast too. Main ignores casts during settings key capture.
 
 `src/main/summonerSession.ts` applies accepted events to the shared cooldown logic with injected time.
-The state is local and in memory for now: leave, feature off, room change, spell change and app restart reset
+The local state is kept in memory: leave, feature off, room change, spell change and app restart reset
 both slots. Pausing input and restarting the helper keep cooldowns. Room mute does not stop local casts.
 Casting emits no chat line and has no visible panel or sound effect yet.
+
+Signed presence now carries optional `spells` with both slot IDs, charge recharge end times and Smite's cast-gap
+end time. `RoomManager.setSummoners` updates our own room state and announces a changed immutable snapshot.
+LAN sends immediately; relays use the existing one-presence-per-second coalescing. Ordinary periodic presence
+heals a missed packet, without ticking the network for the countdown. Feature off omits the field, leave sends
+bye, and spell selection changes announce a fresh ready pair. Pausing keeps cooldowns; it does not stop presence.
+Mac and Linux receive the same peer data while their local casting remains unavailable.
+
+`summonerProtocol.ts` rebuilds untrusted data: known, distinct spells, bounded integer timestamps, at most one
+recharge per ordinary spell or two sequential 90-second Smite recharges, and at most a 15-second cast gap.
+Bounds use the sender's packet timestamp. Invalid spell data drops only that optional field, not the member.
+Expired timestamps remain valid. Members retain the latest presence sequence for spell state, so an older
+packet cannot undo a cast or a reset. Missing data is the old-peer/default-ready fallback for the panel.
+
+A `spell` message carries the clicked member, slot, cooldown snapshot and target location. It is signed and
+passes the same member, pause, mute, location and rate gates as an alive line. The panel/chat handler is added
+in the next segment. Old decoders ignore both the extra presence field and the unknown spell-click type, so
+`PROTOCOL_VERSION` stays 1. Signed worst-case presence still fits the 1200-byte sealed packet limit.
+No new host is contacted; spell state uses the room's existing encrypted LAN and relay transports.
 
 ### Whispers (this fork)
 

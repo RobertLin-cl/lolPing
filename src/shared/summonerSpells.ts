@@ -75,6 +75,7 @@ export interface SummonerSpellSelection {
   f: SummonerSpellId;
 }
 export type SummonerSpellSlot = keyof SummonerSpellSelection;
+export type SummonerState = Readonly<Record<SummonerSpellSlot, SpellCooldown>>;
 
 /** Picking the other slot's spell swaps the pair, so a selection never introduces a duplicate. */
 export function selectSummonerSpell(

@@ -1,6 +1,7 @@
 import type { KeyObject } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import type { EmoteRef } from '../shared/emotes';
+import type { SpellCooldown, SummonerSpellSlot, SummonerState } from '../shared/summonerSpells';
 import type { PingId } from '../shared/pings';
 import type { JoinResult, MemberPath, RoomMember, RoomStateCore } from '../shared/room';
 import type { TagRgb } from '../shared/roomColors';
@@ -92,6 +93,18 @@ export interface RemoteText {
   who?: string;
 }
 
+/** The snapshot a member clicked in the panel, to be shown as a scoreboard line. */
+export interface RemoteSpell {
+  peer: string;
+  who: string;
+  slot: SummonerSpellSlot;
+  cooldown: SpellCooldown;
+  tag: MemberTag;
+  displayId: number;
+  x: number;
+  y: number;
+}
+
 /** A whisper a member sealed for us: nobody else in the room could read it, or tell it was theirs. */
 export interface RemoteWhisper {
   peer: string;
@@ -135,6 +148,8 @@ interface Member {
   muted: boolean;
   /** The custom emote hashes their last presence announced. */
   em: string[];
+  spells: SummonerState | null;
+  spellSeq: number;
   firstSeen: number;
   /** Ever heard over the internet: dropped after the longer silence. */
   viaInternet: boolean;
@@ -150,7 +165,7 @@ interface Member {
  * The room: who is in it, what we send, and what we let through. Talks to the network only through transports,
  * which carry sealed packets. Events: 'state' (RoomStateCore), 'remotePing' (RemotePing), 'remoteEmote' (RemoteEmote), 'toast' (RoomToast),
  * 'remoteText' (RemoteText: text and alive lines), 'vote' (VoteMsg), 'ballot' (BallotMsg), 'saveCode' (canonical code | null: what "rejoin last room" should remember), 'emotes' (peer, announced hashes),
- * 'whisper' (RemoteWhisper),
+ * 'whisper' (RemoteWhisper), 'remoteSpell' (RemoteSpell: a clicked spell snapshot),
  * 'want' (WantMsg), 'chunk' (ChunkMsg) and 'memberGone' (peer), which EmoteTransfer answers.
  */
 export class RoomManager extends EventEmitter {
@@ -186,6 +201,7 @@ export class RoomManager extends EventEmitter {
   private readonly transferLimiter: RateLimiter;
   /** Ballots per member, apart from `limiter`: a vote needs every answer, but not a flood of them. */
   private readonly ballotLimiter: RateLimiter;
+  private summoners: SummonerState | null = null;
   private paused = false;
   private roomMuted = false;
   private aloneSince: number | null = null;
@@ -269,6 +285,10 @@ export class RoomManager extends EventEmitter {
   /** `who` is the member whose name the line shows; the receivers write the words themselves. */
   sendAlive(who: string, shared: { d: number; x: number; y: number }): void {
     this.sendShared({ t: 'alive', who, ...shared });
+  }
+
+  sendSpell(who: string, slot: SummonerSpellSlot, cooldown: SpellCooldown, shared: { d: number; x: number; y: number }): void {
+    this.sendShared({ t: 'spell', who, slot, cooldown, ...shared });
   }
 
   sendVote(v: { id: string; kind: VoteKind; target?: string }): void {
@@ -366,6 +386,14 @@ export class RoomManager extends EventEmitter {
     return this.relayCap.allow('internet', RELAY_PING_RATE, RELAY_PING_BURST);
   }
 
+  /** Changed local spell state rides on the next throttled presence and updates our own roster immediately. */
+  setSummoners(state: SummonerState | null): void {
+    if (state === this.summoners) return;
+    this.summoners = state;
+    this.announce();
+    this.emitState();
+  }
+
   setStatusFlags(f: { paused: boolean; roomMuted: boolean }): void {
     if (f.paused === this.paused && f.roomMuted === this.roomMuted) return;
     this.paused = f.paused;
@@ -427,12 +455,12 @@ export class RoomManager extends EventEmitter {
       {
         peer: this.self, name: p.name, color: p.color, rgb: p.rgb, path: 'lan', status: this.status(),
         needsUpdate: false, noEmotes: false, noChat: false, textOff: p.nf.includes('text'), votesOff: p.nf.includes('votes'),
-        muted: false, self: true,
+        muted: false, self: true, ...(this.summoners ? { spells: this.summoners } : {}),
       },
       ...[...this.members.values()].map((m) => ({
         peer: m.peer, name: m.name, color: m.color, rgb: m.rgb, path: this.path(m, now), status: m.status,
         needsUpdate: m.needsUpdate, noEmotes: m.noEmotes, noChat: m.noChat, textOff: m.textOff, votesOff: m.votesOff,
-        muted: m.muted, self: false,
+        muted: m.muted, self: false, ...(m.spells && !m.needsUpdate ? { spells: m.spells } : {}),
       })),
     ];
     return {
@@ -521,6 +549,7 @@ export class RoomManager extends EventEmitter {
     if (this.settle) clearTimeout(this.settle);
     this.ticker = this.settle = null;
     this.phase = 'idle';
+    this.summoners = null;
     this.code = this.keys = null;
     for (const m of this.members.keys()) this.emit('memberGone', m);
     this.members.clear();
@@ -602,14 +631,14 @@ export class RoomManager extends EventEmitter {
       this.emit('ballot', msg satisfies BallotMsg);
       return;
     }
-    // Pings, emotes, text, alive lines and votes pass the same gates and share one budget per member.
+    // Pings, emotes, text, alive and spell lines and votes pass the same gates and share one budget per member.
     if (this.paused || this.roomMuted || m.muted || m.needsUpdate) return;
     if (!this.limiter.allow(m.peer, this.deps.profile().limit)) return;
     if (msg.t === 'vote') {
       this.emit('vote', msg satisfies VoteMsg);
       return;
     }
-    if (msg.t === 'alive' && msg.who !== this.self && !this.members.has(msg.who)) return;
+    if ((msg.t === 'alive' || msg.t === 'spell') && msg.who !== this.self && !this.members.has(msg.who)) return;
     const target = this.deps.resolveTarget(msg.d);
     if (!target) return;
     const [x, y] = [msg.x * target.width, msg.y * target.height];
@@ -618,6 +647,9 @@ export class RoomManager extends EventEmitter {
     else if (msg.t === 'emote') this.emit('remoteEmote', { displayId: target.displayId, x, y, ref: msg.e, fx: msg.fx, peer: m.peer, tag } satisfies RemoteEmote);
     else if (msg.t === 'text') {
       this.emit('remoteText', { kind: 'text', peer: m.peer, tag, displayId: target.displayId, x, y, text: msg.text } satisfies RemoteText);
+    } else if (msg.t === 'spell') {
+      this.emit('remoteSpell', { peer: m.peer, tag, who: msg.who, slot: msg.slot, cooldown: msg.cooldown,
+        displayId: target.displayId, x, y } satisfies RemoteSpell);
     } else if (msg.t === 'alive') {
       this.emit('remoteText', { kind: 'alive', peer: m.peer, tag, displayId: target.displayId, x, y, who: msg.who } satisfies RemoteText);
     }
@@ -665,12 +697,13 @@ export class RoomManager extends EventEmitter {
       m = {
         peer: msg.peer, name: msg.name, color: msg.color, rgb: msg.rgb ?? null, status: msg.status,
         needsUpdate: false, noEmotes: false, noChat: false, textOff: false, votesOff: false, muted: false, em: [],
-        firstSeen: this.deps.now(), viaInternet: false, paths: {}, pk: null, xk: null,
+        spells: null, spellSeq: -1, firstSeen: this.deps.now(), viaInternet: false, paths: {}, pk: null, xk: null,
       };
       this.members.set(m.peer, m);
       this.aloneSince = null;
     }
     if (pk) {
+      if (!m.pk) m.spellSeq = -1;
       m.pk = pk;
       this.boundIds.add(m.peer);
     }
@@ -685,6 +718,11 @@ export class RoomManager extends EventEmitter {
     m.textOff = msg.nf.includes('text');
     m.votesOff = msg.nf.includes('votes');
     m.em = msg.em;
+    // LAN and relays can deliver an older, still valid presence after a cast or reset.
+    if (msg.seq > m.spellSeq) {
+      m.spells = msg.spells ?? null;
+      m.spellSeq = msg.seq;
+    }
     // Every presence, so a hash whose assembly gave up is asked for again: EmoteTransfer skips what is already here.
     // A paused lolPing neither fetches nor serves stills; the next presence after unpausing starts prefetch again.
     if (!this.paused) this.emit('emotes', m.peer, [...m.em]);
@@ -772,6 +810,7 @@ export class RoomManager extends EventEmitter {
       ...(p.nf.length ? { nf: [...p.nf] } : {}),
       // Left out rather than sent as null: a peer on an older build ignores it either way, and this keeps the packet small.
       ...(p.rgb ? { rgb: p.rgb } : {}),
+      ...(this.summoners ? { spells: this.summoners } : {}),
     });
   }
 

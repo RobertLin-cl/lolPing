@@ -466,6 +466,7 @@ function start(): void {
     const state = room.state();
     summoners.sync(settings, PLATFORM === 'win' && state.phase === 'active' && featureOn(settings, 'roomSpells')
       ? state.code : null);
+    room.setSummoners(summoners.state());
   };
   let live = liveKeys(settings, { active: false }, enabled, PLATFORM);
   const sendConfig = (): void => {
@@ -812,7 +813,7 @@ function start(): void {
     else if (ev.type === 'textRequested') openText();
     else if (ev.type === 'summonerCast') {
       syncSummoners();
-      summoners.cast(ev.slot, live.spells && enabled && !capturing);
+      if (summoners.cast(ev.slot, live.spells && enabled && !capturing)) room.setSummoners(summoners.state());
     } else if (ev.type === 'panel') {
       if (ev.show) panelHold.down();
       else panelHold.up();

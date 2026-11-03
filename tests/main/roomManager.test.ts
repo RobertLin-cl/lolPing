@@ -5,8 +5,11 @@ import {
   type RoomIdentity, type RoomKeys, type WhisperKeys,
 } from '../../src/main/roomCrypto';
 import {
-  MAX_MEMBERS, RoomManager, type RemoteEmote, type RemotePing, type RemoteText, type RemoteWhisper, type RoomToast,
+  MAX_MEMBERS, RoomManager, type RemoteEmote, type RemotePing, type RemoteText, type RemoteWhisper, type RemoteSpell, type RoomToast,
 } from '../../src/main/roomManager';
+import { castSpell, createSpellCooldown } from '../../src/shared/summonerSpells';
+import { SummonerSession } from '../../src/main/summonerSession';
+import { DEFAULT_SETTINGS } from '../../src/shared/settings';
 import { formatRoomCode, makeRoomCode } from '../../src/shared/roomCode';
 import type { TagRgb } from '../../src/shared/roomColors';
 import {
@@ -680,6 +683,21 @@ describe('internet over a shared transport', () => {
     await vi.advanceTimersByTimeAsync(3000);
     expect(inet.state().phase).toBe('active');
   }
+
+  it('coalesces spell changes into one relay presence with the latest state', async () => {
+    await joinNow();
+    net.sent = [];
+    const ready = { d: createSpellCooldown('heal'), f: createSpellCooldown('flash') };
+    inet.setSummoners(ready);
+    inet.setSummoners({ ...ready, f: castSpell(ready.f, Date.now()).cooldown });
+    inet.setSummoners(null);
+    expect(decode(net)).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1000);
+    const sent = decode(net);
+    expect(sent).toHaveLength(2);
+    expect(sent[0]).toMatchObject({ spells: ready });
+    expect(sent[1]).not.toHaveProperty('spells');
+  });
 
   it('sends a ping once over a shared transport, however many members use it', async () => {
     await joinNow();
@@ -1444,5 +1462,129 @@ describe('whispers', () => {
     lan.sent.length = 0;
     room.whisper(sam.peer, 'back');
     expect(lan.sent.map((s) => s.to)).toEqual(['lan:s']);
+  });
+});
+
+
+describe('summoner synchronization', () => {
+  const ready = () => ({ d: createSpellCooldown('heal'), f: createSpellCooldown('flash') });
+  const cast = () => { const state = ready(); return { ...state, f: castSpell(state.f, Date.now()).cooldown }; };
+
+  it('announces local changes immediately on LAN and leaves old presences unchanged while off', async () => {
+    await joinActive();
+    expect(sentMessages().at(-1)).not.toHaveProperty('spells');
+    lan.sent = [];
+    const state = cast();
+    room.setSummoners(state);
+    expect(sentMessages().at(-1)).toMatchObject({ t: 'presence', spells: state, proto: 1 });
+    expect(room.state().members[0].spells).toEqual(state);
+    const count = lan.sent.length;
+    room.setSummoners(state);
+    expect(lan.sent).toHaveLength(count);
+    room.setSummoners(null);
+    expect(sentMessages().at(-1)).not.toHaveProperty('spells');
+    expect(room.state().members[0]).not.toHaveProperty('spells');
+  });
+
+  it('carries real session casts, spell changes and feature resets in presence without posting chat', async () => {
+    await joinActive();
+    const session = new SummonerSession(() => Date.now());
+    session.sync(DEFAULT_SETTINGS, CODE);
+    room.setSummoners(session.state());
+    session.cast('f', true);
+    room.setSummoners(session.state());
+    expect(sentMessages().at(-1)).toMatchObject({ t: 'presence', spells: session.state() });
+    expect(texts).toEqual([]);
+    expect(sentMessages().every(m => m.t === 'presence')).toBe(true);
+    session.sync({ summonerD: 'smite', summonerF: 'flash' }, CODE);
+    room.setSummoners(session.state());
+    expect(room.state().members[0].spells?.d.spell).toBe('smite');
+    expect(room.state().members[0].spells?.f.rechargeEndsAt).toEqual([]);
+    session.sync(DEFAULT_SETTINGS, null);
+    room.setSummoners(session.state());
+    expect(sentMessages().at(-1)).not.toHaveProperty('spells');
+  });
+
+  it('stores validated peer spells and clears them when a later presence omits or corrupts them', async () => {
+    await joinActive();
+    const peer = new SignedRemote(21, 'lan:a', lan);
+    const spells = cast();
+    peer.presence({ spells });
+    expect(room.state().members[1].spells).toEqual(spells);
+    peer.presence();
+    expect(room.state().members[1]).not.toHaveProperty('spells');
+    peer.presence({ spells });
+    peer.presence({ spells: { d: spells.d } });
+    expect(room.state().members[1]).not.toHaveProperty('spells');
+    expect(room.state().members[1].needsUpdate).toBe(false);
+  });
+
+  it('ignores delayed spell state and delayed ready fallbacks from an older presence', async () => {
+    await joinActive();
+    const peer = new SignedRemote(22, 'lan:a', lan);
+    peer.presence();
+    const body = { t: 'presence', proto: 1, app: '0.6.5', name: 'Peer', color: 1, status: 'on' };
+    const oldReady = peer.packet(body);
+    const newCast = cast();
+    lan.deliver(peer.key, peer.packet({ ...body, spells: newCast }));
+    lan.deliver(peer.key, oldReady);
+    expect(room.state().members[1].spells).toEqual(newCast);
+    const oldCast = peer.packet({ ...body, spells: newCast });
+    lan.deliver(peer.key, peer.packet(body));
+    lan.deliver(peer.key, oldCast);
+    expect(room.state().members[1]).not.toHaveProperty('spells');
+  });
+
+  it('lets a proven signed identity replace an unsigned presence with a higher sequence', async () => {
+    await joinActive();
+    const peer = new SignedRemote(23, 'lan:a', lan);
+    lan.deliver(peer.key, forged(peer.peer, { t: 'presence', proto: 1, app: '0.6.5', name: 'Fake', color: 1, status: 'on' }, 1000));
+    const spells = cast();
+    peer.presence({ spells });
+    expect(room.state().members[1].spells).toEqual(spells);
+  });
+
+  it('keeps presence state while paused or room-muted, and clears local state across leave and rejoin', async () => {
+    await joinActive();
+    room.setSummoners(cast());
+    room.setStatusFlags({ paused: true, roomMuted: true });
+    const peer = new SignedRemote(24, 'lan:a', lan);
+    const spells = cast();
+    peer.presence({ spells });
+    expect(room.state().members[1].spells).toEqual(spells);
+    room.leave();
+    await joinActive();
+    expect(room.state().members[0]).not.toHaveProperty('spells');
+    expect(room.state().members).toHaveLength(1);
+  });
+
+  it('routes spell-click snapshots through the same member, mute, location and rate gates as alive lines', async () => {
+    await joinActive();
+    const peer = new SignedRemote(25, 'lan:a', lan);
+    peer.presence({ name: 'Peer', color: 1 });
+    const clicks: RemoteSpell[] = [];
+    room.on('remoteSpell', (click: RemoteSpell) => clicks.push(click));
+    const body = { t: 'spell', who: room.self, slot: 'f', cooldown: createSpellCooldown('flash'), d: 1, x: 0.5, y: 0.25 };
+    const send = (extra: Record<string, unknown> = {}) => lan.deliver(peer.key, peer.packet({ ...body, ...extra }));
+    send();
+    expect(clicks[0]).toMatchObject({ who: room.self, slot: 'f', cooldown: body.cooldown, x: 960, y: 270 });
+    room.muteMember(peer.peer, true);
+    send();
+    room.muteMember(peer.peer, false);
+    room.setStatusFlags({ paused: true, roomMuted: false });
+    send();
+    room.setStatusFlags({ paused: false, roomMuted: true });
+    send();
+    room.setStatusFlags({ paused: false, roomMuted: false });
+    send({ who: '1111111111111111' });
+    send({ d: 2 });
+    expect(clicks).toHaveLength(1);
+    profile.limit = 1;
+    await vi.advanceTimersByTimeAsync(1000);
+    send();
+    send();
+    expect(clicks).toHaveLength(2);
+    room.sendSpell(peer.peer, 'f', body.cooldown, { d: 1, x: 0.5, y: 0.25 });
+    expect(sentMessages(peer.key).at(-1)).toMatchObject({ ...body, who: peer.peer });
   });
 });

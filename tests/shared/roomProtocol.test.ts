@@ -1,3 +1,4 @@
+import { createSpellCooldown, castSpell } from '../../src/shared/summonerSpells';
 import { describe, expect, it } from 'vitest';
 import { MAX_PACKET, open, seal } from '../../src/main/roomCrypto';
 import { HD_MAX_BYTES } from '../../src/shared/emotes';
@@ -36,6 +37,27 @@ describe('encode / decode', () => {
 
   it('rejects bytes that are not JSON', () => {
     expect(decodeMessage(new TextEncoder().encode('{nope'))).toBeNull();
+  });
+});
+
+describe('summoner messages', () => {
+  const spells = { d: createSpellCooldown('heal'), f: castSpell(createSpellCooldown('flash'), base.ts).cooldown };
+  const click = { ...base, t: 'spell' as const, who: 'fedcba9876543210', slot: 'f' as const,
+    cooldown: spells.f, d: 1, x: 0.5, y: 0.25 };
+
+  it('round-trips optional presence state and preserves the old presence shape when absent or invalid', () => {
+    expect(decodeMessage(encodeMessage({ ...presence, spells }))).toEqual({ ...presence, spells });
+    expect(validateMessage({ ...presence, spells: { d: spells.d } })).toEqual(presence);
+    expect(decodeMessage(encodeMessage(presence))).toEqual(presence);
+  });
+
+  it('validates a spell-click snapshot and rejects invalid targets, slots, cooldowns and locations', () => {
+    expect(decodeMessage(encodeMessage(click))).toEqual(click);
+    expect(validateMessage({ ...click, extra: true })).toEqual(click);
+    for (const extra of [{ who: 'bad' }, { slot: 'D' }, { cooldown: null }, { d: 0 }, { d: 17 },
+      { x: -1 }, { y: 1.1 }, { cooldown: { ...spells.f, rechargeEndsAt: [base.ts + 300001] } }]) {
+      expect(validateMessage({ ...click, ...extra })).toBeNull();
+    }
   });
 });
 
@@ -482,6 +504,8 @@ describe('message signatures', () => {
     const worst: PresenceMsg = {
       ...base, seq: Number.MAX_SAFE_INTEGER, t: 'presence', proto: 1, app: '9'.repeat(64), name: '😀'.repeat(16), color: 7,
       rgb: [255, 255, 255], status: 'paused', em: Array.from({ length: 9 }, (_, i) => String(i).repeat(32)),
+      spells: { d: castSpell(castSpell(createSpellCooldown('smite'), base.ts - 15000).cooldown, base.ts).cooldown,
+        f: castSpell(createSpellCooldown('teleport'), base.ts).cooldown },
       nf: ['text', 'votes'], pk: `${'B'.repeat(43)}=`, xk: `${'C'.repeat(43)}=`,
     };
     const sealed = seal(Buffer.alloc(32), bytes(joinSigned(enc(worst), SIG)));

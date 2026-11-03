@@ -9,27 +9,24 @@ Updated: 2026-11-03. Branch: `local/hardened`.
 - `1cbae54`: Remembered category filters shared by chat and panel history. Filter controls live only in panel history, as requested later.
 - `c3e910e`: Reproducible extraction of eleven original spell icons and sounds.
 - `2e0ef68`: Pure cooldown logic, including two sequential Smite charges and a 15-second cast gap.
+- `f7e451a`: Windows passive D/F input and local cooldown session, including room/fullscreen gates and resets.
 - `5ab0f8a`: Windows summoner settings, defaults and normalization; shared League-style picker; swapping D/F when choosing the other slot's spell; localization and tests.
 
 The standalone Summoner spells section sits below Emotes, with its own default-off switch, D/F choices and local sound switch. Its options remain visible but inert and grey while off. Rooms must be enabled; the room panel feature is not required. D defaults to Heal, F to Flash. There is no separate summoner switch in the Rooms expander or sound row in the Sound section.
 
-The settings UI and Windows local casting are ready. The current uncommitted segment adds passive D/F observation,
-helper protocol version 8, platform and room gates, and an in-memory local cooldown session. Room synchronization,
-panel display and sound playback are not wired yet. Casting currently has no visible or audible feedback.
+The settings UI, Windows local casting and room state synchronization are ready. The current uncommitted segment
+adds validated optional spell state to signed presence, protects it from delayed older packets, and adds the spell-click
+message and transport event. Protocol version remains 1. Panel display, scoreboard chat handling and sound playback
+are not wired yet, so casting still has no visible or audible feedback.
 
 ## Next work, in order
 
-1. Room synchronization and reset behavior.
-   - Extend presence with spell IDs and cooldown end times, validating untrusted input.
-   - Keep old peers compatible. Existing peers should ignore added presence fields; verify this before deciding whether a protocol bump is needed.
-   - Add a spell-click message that old peers can ignore.
-   - Local resets on leave, feature off, room change, spell change and restart are already wired; add the corresponding presence updates.
-2. Room panel and scoreboard chat lines.
+1. Room panel and scoreboard chat lines.
    - Put two icons beside every member, with a JS clock sweep and remaining time; show Smite charges.
    - Members without spell data use ready D Heal / F Flash.
-   - Left click posts the agreed League sentence in the scoreboard category, respecting the shared filter.
+   - Left click posts the agreed League sentence in the scoreboard category, respecting the shared filter. The signed `spell` message, sender method and `remoteSpell` transport event are ready; add panel actions and main/chat handling.
    - Right click on an own icon clears its cooldown. Casting itself must not post chat.
-3. Local cast sound and final verification.
+2. Local cast sound and final verification.
    - Play only the caster's own spell sound, respecting volume, global mute and the summoner sound switch.
    - Update both READMEs and design notes, including input monitoring and peer visibility in privacy notes.
    - Test two peers, old-peer fallback, reset paths, fullscreen gating, keyboard pass-through and actual sound.
@@ -46,7 +43,7 @@ The original agreed requirements and game sentence keys are in the earlier hando
 
 ## Last verification
 
-For the current local-casting segment:
+For the committed local-casting segment (`f7e451a`):
 
 - TypeScript check passed using `node --single-threaded --max-old-space-size=1024 node_modules/typescript/bin/tsc --noEmit`.
 - `npm test -- --maxWorkers=1 --pool=threads`: 144 files passed; 2235 tests passed, 11 skipped.
@@ -55,6 +52,15 @@ For the current local-casting segment:
 - Shift+D produced text without casting. Gesture suspension still allowed passive events. Feature off cleared cooldowns and stopped events; pausing stopped events while F still typed. Settings were restored and all temporary instrumentation removed.
 - Fullscreen gating, held-key repeats, custom-trigger typing order, platform support, and keys held during feature enabling are covered by native tests. A live fullscreen app has not been checked in this segment.
 - The first concurrent run hit native linker memory exhaustion and test-agent process failures. Sequential native compilation and a fresh full test run both passed.
+
+For the current synchronization segment:
+
+- TypeScript and 742 helper / 533 context tests passed.
+- Focused protocol, validation, room manager and local session tests: 238 passed.
+- Two real signed RoomManagers on isolated UDP loopback ports passed ready-state sync, a Flash cast, feature-off reset and leave. No public relay or user room was used for this smoke test.
+- The actual decoder from `f7e451a` accepted the new presence and ignored the new spell-click message.
+- Windows development app: real D typed normally and updated the room state with Heal's cooldown. Feature off removed the room's spell state. Temporary fields were removed and preferences restored.
+- Full regression passed with 145 files, 2249 tests passed and 11 skipped using Node 24.22.1 with `--maxWorkers=1 --pool=forks` and a 768 MB heap. Thread workers twice failed to clone their result with an out-of-memory error despite free system memory.
 
 ## Local development notes
 
