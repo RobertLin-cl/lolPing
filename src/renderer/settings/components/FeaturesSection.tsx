@@ -1,5 +1,5 @@
 import {
-  Bot24Regular, Chat24Regular, CheckboxChecked24Regular, Emoji24Regular, PeopleCommunity24Regular, People24Regular,
+  Bot24Regular, Games24Regular, Chat24Regular, CheckboxChecked24Regular, Emoji24Regular, PeopleCommunity24Regular, People24Regular,
 } from '@fluentui/react-icons';
 import { useState, type ReactNode } from 'react';
 import { featureGroups, type FeatureId } from '../../../shared/features';
@@ -17,6 +17,7 @@ const ICONS: Record<FeatureId, ReactNode> = {
   roomText: <Chat24Regular />,
   roomVotes: <CheckboxChecked24Regular />,
   roomPanel: <People24Regular />,
+  roomSpells: <Games24Regular />,
 };
 
 /** Switching the teammate on shows its section, which only renders once the new settings are in. */
@@ -50,7 +51,7 @@ export function FeaturesSection({ settings: s, update }: { settings: Settings; u
         return (
           <ExpanderRow key={id} icon={ICONS[id]} title={t.featureTitle[id]} description={t.featureDesc[id]}
             control={<OnOffSwitch checked={s.features[id]} label={t.featureTitle[id]} onChange={(v) => set(id, v)} />}>
-            {parts.map((part) => (
+            {parts.filter((part) => part !== 'roomSpells').map((part) => (
               <SwitchRow key={part} icon={ICONS[part]} title={t.featureTitle[part]} dim={off} disabled={off}
                 description={off ? `${t.featureDesc[part]} ${t.featureNeedsRooms}` : t.featureDesc[part]}
                 checked={s.features[part]} onChange={(v) => set(part, v)} />

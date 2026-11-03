@@ -2,10 +2,24 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  castSpell, clearSpellCooldown, createSpellCooldown, isSummonerSpellId, spellCooldownView, SUMMONER_COOLDOWN_MS, SUMMONER_SPELL_IDS,
+  castSpell, clearSpellCooldown, createSpellCooldown, isSummonerSpellId, selectSummonerSpell, spellCooldownView, SUMMONER_COOLDOWN_MS, SUMMONER_SPELL_IDS,
 } from '../../src/shared/summonerSpells';
 
 describe('summonerSpells', () => {
+  it('swaps D and F when either slot picks the other selected spell', () => {
+    const selection = { d: 'heal', f: 'flash' } as const;
+    expect(selectSummonerSpell(selection, 'd', 'flash')).toEqual({ d: 'flash', f: 'heal' });
+    expect(selectSummonerSpell(selection, 'f', 'heal')).toEqual({ d: 'flash', f: 'heal' });
+    expect(selection).toEqual({ d: 'heal', f: 'flash' });
+  });
+
+  it('replaces only the chosen slot for an unused spell and keeps a current pick unchanged', () => {
+    const selection = { d: 'heal', f: 'flash' } as const;
+    expect(selectSummonerSpell(selection, 'd', 'smite')).toEqual({ d: 'smite', f: 'flash' });
+    expect(selectSummonerSpell(selection, 'f', 'mark')).toEqual({ d: 'heal', f: 'mark' });
+    expect(selectSummonerSpell(selection, 'd', 'heal')).toEqual(selection);
+  });
+
   it('offers eleven spells with matching icons and sounds', () => {
     expect(new Set(SUMMONER_SPELL_IDS).size).toBe(11);
     for (const spell of SUMMONER_SPELL_IDS) {

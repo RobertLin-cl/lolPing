@@ -69,3 +69,20 @@ export function castSpell(cooldown: SpellCooldown, now: number): SpellCastResult
 export function clearSpellCooldown(cooldown: SpellCooldown): SpellCooldown {
   return createSpellCooldown(cooldown.spell);
 }
+
+export interface SummonerSpellSelection {
+  d: SummonerSpellId;
+  f: SummonerSpellId;
+}
+export type SummonerSpellSlot = keyof SummonerSpellSelection;
+
+/** Picking the other slot's spell swaps the pair, so a selection never introduces a duplicate. */
+export function selectSummonerSpell(
+  selection: SummonerSpellSelection, slot: SummonerSpellSlot, spell: SummonerSpellId,
+): SummonerSpellSelection {
+  const next = { ...selection };
+  const other = slot === 'd' ? 'f' : 'd';
+  if (selection[other] === spell) next[other] = selection[slot];
+  next[slot] = spell;
+  return next;
+}

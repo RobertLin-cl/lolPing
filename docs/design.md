@@ -427,7 +427,18 @@ here. A regular spell has one charge and one recharge end time. Smite starts wit
 end and queues another 90 seconds after it. A view removes expired recharge times before counting charges, so a
 late update catches up without timer ticks. The cast gap still applies when a charge returns during it. Clearing a
 cooldown restores every charge and removes the gap; creating a new spell state does the same after a session or
-selection change. Runtime settings, input, presence and panel wiring are added separately.
+selection change.
+
+Settings add `features.roomSpells` (off by default, requires Rooms, offered only on Windows), `summonerD` (Heal),
+`summonerF` (Flash) and `summonerSound` (on). Normalization accepts only the eleven spell IDs and keeps D when duplicate
+choices need repair, choosing Flash or Heal for F. A dedicated Summoner spells section below Emotes contains the
+feature switch, D/F icon slots and local cast sound switch. It stays visible on Windows while the feature is off;
+the choices and sound row grey out until it is enabled. Rooms must be on to use the feature switch, but the room
+panel feature is not required. Both slots open one shared League-style icon grid. Both selected spells show a
+checkmark and their D/F key. Picking the other slot's spell swaps D and F in one settings update
+(`selectSummonerSpell`); picking the current spell leaves the pair unchanged. Options also grey out while paused
+or after helper failure, and the sound row greys out under global mute. Mute room does not grey local spell choices or sounds. English, Simplified Chinese and Traditional Chinese names come from
+CommunityDragon. Input, presence and panel wiring are added separately.
 
 ### Whispers (this fork)
 
@@ -477,7 +488,7 @@ Every member counts the ballots itself. Nobody announces a result.
 
 Each larger piece can be switched off. This keeps lolPing small for people who want only pings.
 
-- **List:** `src/shared/features.ts`. The ids are `teammate`, `emotes`, `rooms`, `roomText`, `roomVotes` and `roomPanel`; the last three require `rooms`. `teammate` is off by default and hidden on Linux (`featureVisible`). `featureOn(settings, id)` is true only when the feature and the one it requires are on. `normalizeFeatures` repairs the `features` setting key by key, so a file from 0.5.x loads with everything on except the teammate.
+- **List:** `src/shared/features.ts`. The ids are `teammate`, `emotes`, `rooms`, `roomText`, `roomVotes`, `roomPanel` and `roomSpells`; the last four require `rooms`. `teammate` is off by default and hidden on every platform in this fork. `roomSpells` is off by default and offered only on Windows (`featureVisible`). `featureOn(settings, id)` is true only when the feature and the one it requires are on. `normalizeFeatures` repairs the `features` setting key by key, so older files keep summoner spells and the teammate off while the other features start on.
 - **Where the switch is read:** four places. What goes to the helper (`configCommand`: no emote key when `emotes` is off, no text or panel key outside a live room); which room messages `roomManager` accepts and sends; which sections the settings window shows; and the switches themselves under Settings → Switches, which show a feature's children inside its expander and grey them while it is off.
 - **What off means:** `emotes`: no emote key, no Emotes section, incoming emotes dropped. `rooms`: the Room section and the tray's room items are hidden, and the current room is left at once. `roomText`: no text shortcut, nothing sent or shown, `nf` lists `text`; the panel's alive click does nothing too. `roomVotes`: see §14. `roomPanel`: the panel key is never watched.
 - **A feature is a unit:** a main-process module with its decisions in a pure module beside it (`roomText.ts`, `roomVotes.ts`, `panelWindows.ts`). This is a convention, not a plugin system: there is no loader and no registry. Existing emote and room code only got the switch at the edges above.

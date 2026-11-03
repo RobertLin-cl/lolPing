@@ -21,6 +21,7 @@ import { KeyCapture } from './components/KeyCapture';
 import { PermissionCard } from './components/PermissionCard';
 import { RoomSection } from './components/RoomSection';
 import { SettingRow, SliderRow, SwitchRow } from './components/rows';
+import { SummonerSpellsSection } from './components/SummonerSpellsSection';
 import { StatusCard } from './components/StatusCard';
 import { TeammateSection } from './components/TeammateSection';
 import { TriggerPicker } from './components/TriggerPicker';
@@ -43,6 +44,7 @@ const SECTIONS: { id: string; label: (t: Strings) => string; icon: ReactNode; fe
   { id: 'wheel', label: (t) => t.navWheel, icon: <DataPie24Regular /> },
   { id: 'pings', label: (t) => t.navPings, icon: <Location24Regular /> },
   { id: 'emotes', label: (t) => t.navEmotes, icon: <Emoji24Regular />, feature: 'emotes' },
+  ...(PLATFORM === 'win' ? [{ id: 'summoners', label: (t: Strings) => t.featureTitle.roomSpells, icon: <Games24Regular /> }] : []),
   { id: 'room', label: (t) => t.navRoom, icon: <PeopleCommunity24Regular />, feature: 'rooms' },
   { id: 'teammate', label: (t) => t.navTeammate, icon: <Sparkle24Regular />, feature: 'teammate' },
   { id: 'app', label: (t) => t.navApp, icon: <Settings24Regular /> },
@@ -261,6 +263,13 @@ function SettingsPage({ settings: s, status, update }: { settings: Settings; sta
           <>
             <div className="section" id="emotes">{t.navEmotes}</div>
             <EmoteSection settings={s} update={update} lengthUnit={LENGTH_UNIT} grey={grey} />
+          </>
+        ) : null}
+
+        {PLATFORM === 'win' ? (
+          <>
+            <div className="section" id="summoners">{t.featureTitle.roomSpells}</div>
+            <SummonerSpellsSection settings={s} update={update} grey={grey} />
           </>
         ) : null}
 

@@ -254,3 +254,22 @@ main.content > *, .member, .mateRule, .mateStack > .mateRow { animation: lpRise 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 1ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
 }
+
+/* League spell slots and one shared selection grid, including in the light settings theme. */
+.summonerSlots { display: flex; gap: 10px; }
+.summonerSlot { position: relative; width: 54px; height: 54px; padding: 2px; border: 2px solid #785a28; background: #010a13; cursor: pointer; }
+.summonerSlot img { display: block; width: 100%; height: 100%; }
+.summonerSlot kbd, .summonerChoiceArt kbd { position: absolute; bottom: 0; left: 0; padding: 0 4px; background: #010a13; color: #f0e6d2; font-family: inherit; font-size: 11px; font-weight: 600; line-height: 16px; }
+.summonerSlot:hover, .summonerSlot:focus-visible, .summonerSlot.active { border-color: #0ac8b9; outline: none; }
+.fui-PopoverSurface.summonerMenu { width: 330px; max-width: calc(100vw - 24px); max-height: calc(100vh - 64px); overflow-y: auto; box-sizing: border-box; padding: 12px; border: 7px solid transparent; border-image: url('/ui/options-frame.png') 14 / 7px stretch; border-radius: 0; background: linear-gradient(#0d2128, #07131a) padding-box; color: #cdbe91; }
+.summonerMenuTitle { margin-bottom: 12px; color: #c8aa6e; font-size: 13px; font-weight: 600; }
+.summonerGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 8px; }
+.summonerChoice { min-width: 0; padding: 0; border: 0; background: transparent; color: #cdbe91; font: inherit; cursor: pointer; }
+.summonerChoiceArt { position: relative; display: block; width: 50px; height: 50px; margin: 0 auto; border: 2px solid #463714; }
+.summonerChoiceArt img { display: block; width: 100%; height: 100%; }
+.summonerChoice[aria-pressed="true"] .summonerChoiceArt { border-color: #c8aa6e; }
+.summonerChoice:hover .summonerChoiceArt, .summonerChoice:focus-visible .summonerChoiceArt { border-color: #0ac8b9; box-shadow: 0 0 7px #0ac8b955; }
+.summonerChoice:focus-visible { outline: none; }
+.summonerCheck { position: absolute; right: -3px; bottom: -3px; display: grid; place-items: center; width: 20px; height: 20px; border: 1px solid #0ac8b9; background: #010a13; color: #0ac8b9; }
+.summonerChoiceName { display: block; margin-top: 5px; overflow-wrap: anywhere; font-size: 11px; line-height: 14px; }
+.summonerMenuHint { margin-top: 12px; color: #a09b8c; font-size: 11px; line-height: 16px; }

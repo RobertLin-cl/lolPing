@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_FEATURES, featureGroups, featureOn, featureVisible, liveKeys, normalizeFeatures, roomFeaturesOff } from '../../src/shared/features';
 
 describe('features', () => {
-  it('turns everything on by default except the teammate', () => {
+  it('keeps the teammate and summoner spells off by default', () => {
     expect(normalizeFeatures(undefined)).toEqual(DEFAULT_FEATURES);
-    expect(Object.entries(DEFAULT_FEATURES).filter(([, v]) => !v).map(([k]) => k)).toEqual(['teammate']);
+    expect(Object.entries(DEFAULT_FEATURES).filter(([, v]) => !v).map(([k]) => k)).toEqual(['teammate', 'roomSpells']);
   });
 
   it('keeps the teammate off by default and never offers it, on any platform', () => {
@@ -19,10 +19,22 @@ describe('features', () => {
   it('groups the room features under Rooms and leaves the others on their own', () => {
     expect(featureGroups('win')).toEqual([
       { id: 'emotes', parts: [] },
-      { id: 'rooms', parts: ['roomText', 'roomVotes', 'roomPanel'] },
+      { id: 'rooms', parts: ['roomText', 'roomVotes', 'roomPanel', 'roomSpells'] },
     ]);
     expect(featureGroups('mac').map((g) => g.id)).toEqual(['emotes', 'rooms']);
     expect(featureGroups('linux').map((g) => g.id)).toEqual(['emotes', 'rooms']);
+  });
+
+  it('offers summoner spells only on Windows and keeps them off in old settings', () => {
+    expect(featureVisible('roomSpells', 'win')).toBe(true);
+    for (const platform of ['mac', 'linux'] as const) {
+      expect(featureVisible('roomSpells', platform)).toBe(false);
+      expect(featureGroups(platform).find((group) => group.id === 'rooms')?.parts)
+        .toEqual(['roomText', 'roomVotes', 'roomPanel']);
+    }
+    expect(normalizeFeatures({ roomPanel: true }).roomSpells).toBe(false);
+    expect(normalizeFeatures({ roomSpells: true }).roomSpells).toBe(true);
+    expect(normalizeFeatures({ roomSpells: 'yes' }).roomSpells).toBe(false);
   });
 
   it('repairs a broken value key by key', () => {
@@ -38,6 +50,7 @@ describe('features', () => {
     expect(featureOn(s, 'roomText')).toBe(false);
     expect(featureOn(s, 'roomVotes')).toBe(false);
     expect(featureOn(s, 'roomPanel')).toBe(false);
+    expect(featureOn({ features: { ...s.features, roomSpells: true } }, 'roomSpells')).toBe(false);
     expect(featureOn(s, 'rooms')).toBe(false);
     expect(featureOn(s, 'emotes')).toBe(true);
   });

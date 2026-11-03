@@ -1,3 +1,4 @@
+import { SUMMONER_SPELL_IDS } from '../../src/shared/summonerSpells';
 import { describe, expect, it } from 'vitest';
 import { resolveLang, strings } from '../../src/shared/i18n';
 import { ALL_PINGS } from '../../src/shared/pings';
@@ -46,6 +47,16 @@ describe('language', () => {
     expect(zh.roomPrivacy).toContain('中继');
     expect(en.roomInternet).toBe('Allow internet connections');
     expect(zh.roomInternet).toBe('允许互联网连接');
+  });
+
+  it('names every summoner spell in all three languages', () => {
+    for (const lang of ['en', ...CHINESE] as const) {
+      const names = strings(lang).summonerNames;
+      expect(Object.keys(names).sort()).toEqual([...SUMMONER_SPELL_IDS].sort());
+      for (const id of SUMMONER_SPELL_IDS) expect(names[id].trim()).not.toBe('');
+    }
+    expect(strings('zh-TW').summonerNames).toMatchObject({ barrier: '光盾', ghost: '鬼步', clarity: '清晰' });
+    expect(strings('zh-CN').summonerNames.heal).toBe('治疗术');
   });
 
   it('has every string in every language', () => {

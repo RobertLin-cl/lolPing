@@ -1,3 +1,4 @@
+import { isSummonerSpellId, type SummonerSpellId } from './summonerSpells';
 import { DEFAULT_CHAT_FILTER, normalizeChatFilter, type ChatFilter } from './chatFilter';
 import { normalizeChatBounds, type ChatBounds } from './chatBounds';
 import { DEFAULT_CLICK_EMOTE, DEFAULT_EMOTE_WHEEL } from './emoteCatalog';
@@ -89,6 +90,9 @@ export interface Settings {
   /** How wide imported emotes appear, ours and room members' alike, and the "?" that stands in for a missing one. */
   customEmoteSizePx: number;
   emoteSound: boolean;
+  summonerSound: boolean;
+  summonerD: SummonerSpellId;
+  summonerF: SummonerSpellId;
   /** Imported emotes, at most MAX_CUSTOM_EMOTES. Their files live in the data folder. */
   customEmotes: CustomEmote[];
   /** Fetch and show room members' custom emotes. Off: nothing is fetched or served, and their images show as the placeholder. */
@@ -158,6 +162,9 @@ export const DEFAULT_SETTINGS: Settings = {
   emoteSizePx: 150,
   customEmoteSizePx: 300,
   emoteSound: true,
+  summonerSound: true,
+  summonerD: 'heal',
+  summonerF: 'flash',
   customEmotes: [],
   friendEmotes: true,
   autoUpdateCheck: true,
@@ -186,7 +193,7 @@ export const LIMITS = {
 
 type NumKey = keyof typeof LIMITS;
 type BoolKey = 'enabledOnStart' | 'clickPing' | 'gameCheck' | 'keepLastPing' | 'muted' | 'tickSound' | 'launchAtStartup' | 'allowInternet' | 'rejoinRoom' | 'roomMuted'
-  | 'emoteClick' | 'emoteSound' | 'friendEmotes' | 'autoUpdateCheck';
+  | 'emoteClick' | 'emoteSound' | 'summonerSound' | 'friendEmotes' | 'autoUpdateCheck';
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const isVk = (v: unknown): v is number => Number.isInteger(v) && (v as number) >= 1 && (v as number) <= 254;
@@ -362,6 +369,10 @@ export function normalizeSettings(raw: unknown, platform: Platform = 'win', iden
   const emote = emoteKey(r.emoteTrigger, platform);
   const emoteVk = triggerVk(triggersClash(pingTrigger, emote, toggleHotkey) ? 'off' : emote);
   const custom = customEmotes(r.customEmotes);
+  const summonerD = isSummonerSpellId(r.summonerD) ? r.summonerD : DEFAULT_SETTINGS.summonerD;
+  const requestedF = isSummonerSpellId(r.summonerF) ? r.summonerF : DEFAULT_SETTINGS.summonerF;
+  // Keep D when an old or hand-edited file assigns the same spell twice.
+  const summonerF = requestedF !== summonerD ? requestedF : summonerD === 'flash' ? 'heal' : 'flash';
   return {
     version: 1,
     enabledOnStart: bool(r.enabledOnStart, 'enabledOnStart'),
@@ -399,6 +410,8 @@ export function normalizeSettings(raw: unknown, platform: Platform = 'win', iden
     emoteSizePx: num(r.emoteSizePx, 'emoteSizePx'),
     customEmoteSizePx: num(r.customEmoteSizePx, 'customEmoteSizePx'),
     emoteSound: bool(r.emoteSound, 'emoteSound'),
+    summonerSound: bool(r.summonerSound, 'summonerSound'),
+    summonerD, summonerF,
     customEmotes: custom,
     friendEmotes: bool(r.friendEmotes, 'friendEmotes'),
     autoUpdateCheck: bool(r.autoUpdateCheck, 'autoUpdateCheck'),

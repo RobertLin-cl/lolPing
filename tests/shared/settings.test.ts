@@ -691,11 +691,12 @@ describe('update settings', () => {
 });
 
 describe('feature settings', () => {
-  it('loads a 0.5.2 settings file with every feature on but the teammate', () => {
+  it('loads older settings with summoner spells and the teammate off', () => {
     const { features: _features, ...old } = DEFAULT_SETTINGS;
     expect(normalizeSettings(old).features).toEqual(DEFAULT_SETTINGS.features);
-    const { teammate, ...rest } = normalizeSettings(old).features;
+    const { teammate, roomSpells, ...rest } = normalizeSettings(old).features;
     expect(teammate).toBe(false);
+    expect(roomSpells).toBe(false);
     expect(Object.values(rest).every((v) => v)).toBe(true);
   });
 
@@ -705,7 +706,7 @@ describe('feature settings', () => {
     expect(s.features.rooms).toBe(true);
   });
 
-  it('falls back to every feature on when features is not an object', () => {
+  it('uses feature defaults when features is not an object', () => {
     for (const raw of ['yes', 1, null, [true]]) expect(normalizeSettings({ features: raw }).features).toEqual(DEFAULT_SETTINGS.features);
     expect(normalizeSettings({ features: { rooms: 1 } }).features.rooms).toBe(true);
   });
@@ -714,6 +715,40 @@ describe('feature settings', () => {
     const on = { features: { ...DEFAULT_SETTINGS.features, teammate: true } };
     for (const platform of ['win', 'mac', 'linux'] as const) expect(normalizeSettings(on, platform).features.teammate).toBe(false);
     expect(mergeSettings(DEFAULT_SETTINGS, on).features.teammate).toBe(false);
+  });
+});
+
+describe('summoner spell settings', () => {
+  it('gives old settings D Heal, F Flash and sound on with the feature off', () => {
+    const settings = normalizeSettings({});
+    expect(settings.summonerD).toBe('heal');
+    expect(settings.summonerF).toBe('flash');
+    expect(settings.summonerSound).toBe(true);
+    expect(settings.features.roomSpells).toBe(false);
+  });
+
+  it('keeps valid choices and the sound switch', () => {
+    const settings = normalizeSettings({ summonerD: 'smite', summonerF: 'mark', summonerSound: false });
+    expect(settings.summonerD).toBe('smite');
+    expect(settings.summonerF).toBe('mark');
+    expect(settings.summonerSound).toBe(false);
+  });
+
+  it('repairs broken choices and duplicate spells while keeping D first', () => {
+    for (const value of [null, 4, 'revive', ['flash'], {}]) {
+      const settings = normalizeSettings({ summonerD: value, summonerF: value, summonerSound: value });
+      expect([settings.summonerD, settings.summonerF, settings.summonerSound]).toEqual(['heal', 'flash', true]);
+    }
+    expect(normalizeSettings({ summonerD: 'flash', summonerF: 'flash' }))
+      .toMatchObject({ summonerD: 'flash', summonerF: 'heal' });
+    expect(normalizeSettings({ summonerD: 'ghost', summonerF: 'ghost' }))
+      .toMatchObject({ summonerD: 'ghost', summonerF: 'flash' });
+  });
+
+  it('keeps D and F distinct after partial settings updates', () => {
+    const settings = mergeSettings(DEFAULT_SETTINGS, { summonerD: 'flash' });
+    expect([settings.summonerD, settings.summonerF]).toEqual(['flash', 'heal']);
+    expect(mergeSettings(settings, { summonerF: 'flash' }).summonerF).toBe('heal');
   });
 });
 

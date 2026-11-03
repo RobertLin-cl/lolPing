@@ -1,7 +1,7 @@
 import type { Platform } from './platform';
 import type { RoomFeatureOff } from './roomProtocol';
 
-export type FeatureId = 'teammate' | 'emotes' | 'rooms' | 'roomText' | 'roomVotes' | 'roomPanel';
+export type FeatureId = 'teammate' | 'emotes' | 'rooms' | 'roomText' | 'roomVotes' | 'roomPanel' | 'roomSpells';
 export type Features = Record<FeatureId, boolean>;
 
 /** In the order of Settings → Switches. A feature with `requires` counts as off while that one is off. */
@@ -12,11 +12,14 @@ export const FEATURES: readonly { id: FeatureId; requires?: FeatureId }[] = [
   { id: 'roomText', requires: 'rooms' },
   { id: 'roomVotes', requires: 'rooms' },
   { id: 'roomPanel', requires: 'rooms' },
+  { id: 'roomSpells', requires: 'rooms' },
 ];
 
-export const DEFAULT_FEATURES: Features = { teammate: false, emotes: true, rooms: true, roomText: true, roomVotes: true, roomPanel: true };
+export const DEFAULT_FEATURES: Features = {
+  teammate: false, emotes: true, rooms: true, roomText: true, roomVotes: true, roomPanel: true, roomSpells: false,
+};
 
-/** Turns anything into a full Features object: a missing or non-boolean key falls back to on, unknown keys are dropped. */
+/** Turns anything into a full Features object: a missing or non-boolean key falls back to its default, unknown keys are dropped. */
 export function normalizeFeatures(raw: unknown): Features {
   const r = typeof raw === 'object' && raw !== null && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
   const out = { ...DEFAULT_FEATURES };
@@ -27,9 +30,9 @@ export function normalizeFeatures(raw: unknown): Features {
   return out;
 }
 
-/** Whether Settings → Switches offers a feature on this platform. This fork never offers the teammate, on any platform. */
-export function featureVisible(id: FeatureId, _platform: Platform): boolean {
-  return id !== 'teammate';
+/** Offers summoner spells only on Windows; this fork never offers the teammate. */
+export function featureVisible(id: FeatureId, platform: Platform): boolean {
+  return id !== 'teammate' && (id !== 'roomSpells' || platform === 'win');
 }
 
 /** The rows of Settings → Switches on this platform: each top-level feature with the ones that require it, in list order. */
