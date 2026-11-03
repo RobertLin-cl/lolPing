@@ -156,7 +156,7 @@ export function WheelEditor<T extends string>({
   const isPicked = (match: (p: WheelSource<T>) => boolean) => (picked !== null && match(picked) ? ' picked' : '');
 
   return (
-    <div className={`card wheelEditor${dim ? ' dim' : ''}`}>
+    <div className={`card wheelEditor${dim ? ' dim' : ''}`} inert={dim}>
       <div className="weHead">
         <div className="lbl">
           {labels.title}

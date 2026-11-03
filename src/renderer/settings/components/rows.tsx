@@ -5,9 +5,10 @@ import { useId, useState, type ReactNode } from 'react';
 import { LIMITS } from '../../../shared/settings';
 import { useText } from '../text';
 
+/** A greyed row (`dim`) is `inert`: CSS only keeps the mouse out, and this keeps Tab and Space out too. */
 export function SettingRow(props: { icon: ReactNode; title: ReactNode; description?: ReactNode; dim?: boolean; children: ReactNode }) {
   return (
-    <div className={`card${props.dim ? ' dim' : ''}`}>
+    <div className={`card${props.dim ? ' dim' : ''}`} inert={props.dim}>
       {props.icon === null ? null : <span className="icon">{props.icon}</span>}
       <div className="lbl">
         {props.title}
@@ -46,7 +47,7 @@ export function ExpanderRow(props: {
   const [open, setOpen] = useState(props.defaultOpen ?? false);
   const id = useId();
   return (
-    <div className={`card expander${open ? ' open' : ''}${props.dim ? ' dim' : ''}`}>
+    <div className={`card expander${open ? ' open' : ''}${props.dim ? ' dim' : ''}`} inert={props.dim}>
       <div className="expHead" onClick={() => setOpen(!open)}>
         <span className="icon">{props.icon}</span>
         <div className="lbl">
