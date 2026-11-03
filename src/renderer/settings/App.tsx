@@ -27,6 +27,7 @@ import { TriggerPicker } from './components/TriggerPicker';
 import { WheelEditor, type PoolItem } from './components/WheelEditor';
 import { TextContext, useText } from './text';
 import { macDarkTheme, macLightTheme } from './macTheme';
+import { greyedRows } from './greyedRows';
 import { barFrames } from './navIndicator';
 import { useAppState, type Update } from './useAppState';
 import { useUpdateState } from './useUpdateState';
@@ -102,7 +103,7 @@ function SettingsPage({ settings: s, status, update }: { settings: Settings; sta
   const updateState = useUpdateState() ?? null; // no update checker in this build, or not known yet: no update controls
   const [active, setActive] = useState(SECTIONS[0].id);
   const sections = SECTIONS.filter((sec) => !sec.feature || featureOn(s, sec.feature));
-  const off = !status.enabled || status.helper === 'failed';
+  const grey = greyedRows(s, status);
   const trigger = triggerLabel(s.trigger, t.lang, PLATFORM);
   const [hotkeyError, setHotkeyError] = useState<string | null>(null);
   const [triggerError, setTriggerError] = useState<string | null>(null);
@@ -211,33 +212,33 @@ function SettingsPage({ settings: s, status, update }: { settings: Settings; sta
 
         {/* While lolPing is off, rows that do nothing then grey out: Sound, Wheel, Pings, Emotes and most of Room. */}
         <div className="section" id="sound">{t.navSound}</div>
-        <SwitchRow icon={<SpeakerMute24Regular />} title={t.mute} checked={s.muted} onChange={(v) => void update({ muted: v })} dim={off} />
+        <SwitchRow icon={<SpeakerMute24Regular />} title={t.mute} checked={s.muted} onChange={(v) => void update({ muted: v })} dim={grey.paused} />
         <SliderRow limit="volume" icon={<Speaker224Regular />} title={t.volume} value={s.volume}
-          format={(v) => `${v}`} onChange={(v) => void update({ volume: v })} dim={off || s.muted} />
+          format={(v) => `${v}`} onChange={(v) => void update({ volume: v })} dim={grey.sound} />
         {featureOn(s, 'emotes') ? (
           <SwitchRow icon={<Emoji24Regular />} title={t.emoteSound} description={t.emoteSoundDesc}
-            checked={s.emoteSound} onChange={(v) => void update({ emoteSound: v })} dim={off || s.muted} />
+            checked={s.emoteSound} onChange={(v) => void update({ emoteSound: v })} dim={grey.sound} />
         ) : null}
         <SwitchRow icon={<MusicNote224Regular />} title={t.tickSound} description={t.tickSoundDesc}
-          checked={s.tickSound} onChange={(v) => void update({ tickSound: v })} dim={off || s.muted} />
+          checked={s.tickSound} onChange={(v) => void update({ tickSound: v })} dim={grey.sound} />
 
         <div className="section" id="wheel">{t.navWheel}</div>
         <SliderRow limit="wheelSizePx" icon={<ResizeLarge24Regular />} title={t.wheelSize} description={t.wheelSizeDesc}
-          value={s.wheelSizePx} format={(v) => `${v} ${LENGTH_UNIT}`} onChange={(v) => void update({ wheelSizePx: v })} dim={off} />
+          value={s.wheelSizePx} format={(v) => `${v} ${LENGTH_UNIT}`} onChange={(v) => void update({ wheelSizePx: v })} dim={grey.paused} />
         <SliderRow limit="dragThresholdPx" icon={<ArrowMove24Regular />} title={t.dragDistance} description={t.dragDistanceDesc}
-          value={s.dragThresholdPx} format={(v) => `${v} ${LENGTH_UNIT}`} onChange={(v) => void update({ dragThresholdPx: v })} dim={off} />
+          value={s.dragThresholdPx} format={(v) => `${v} ${LENGTH_UNIT}`} onChange={(v) => void update({ dragThresholdPx: v })} dim={grey.paused} />
         {PLATFORM === 'win' && ( // only the Windows helper has a fullscreen probe
           <SwitchRow icon={<Games24Regular />} title={t.gameCheck}
             description={t.gameCheckDesc}
-            checked={s.gameCheck} onChange={(v) => void update({ gameCheck: v })} dim={off} />
+            checked={s.gameCheck} onChange={(v) => void update({ gameCheck: v })} dim={grey.paused} />
         )}
         <SliderRow limit="pingDurationS" icon={<Timer24Regular />} title={t.pingDuration} description={t.pingDurationDesc}
-          value={s.pingDurationS} format={(v) => `${v.toFixed(1)} s`} onChange={(v) => void update({ pingDurationS: v })} dim={off} />
+          value={s.pingDurationS} format={(v) => `${v.toFixed(1)} s`} onChange={(v) => void update({ pingDurationS: v })} dim={grey.paused} />
         <SwitchRow icon={<Pin24Regular />} title={t.keepLastPing} description={t.keepLastPingDesc}
-          checked={s.keepLastPing} onChange={(v) => void update({ keepLastPing: v })} dim={off} />
+          checked={s.keepLastPing} onChange={(v) => void update({ keepLastPing: v })} dim={grey.paused} />
 
         <div className="section" id="pings">{t.navPings}</div>
-        <SettingRow icon={<Cursor24Regular />} title={t.triggerKey} dim={off}
+        <SettingRow icon={<Cursor24Regular />} title={t.triggerKey} dim={grey.paused}
           description={(
             <>
               {mouseTrigger ? t.triggerMouseDesc : t.triggerKeyDesc}
@@ -252,25 +253,25 @@ function SettingsPage({ settings: s, status, update }: { settings: Settings; sta
         {triggerError ? <div className="rowError" role="alert">{triggerError}</div> : null}
         <SwitchRow icon={<CursorClick24Regular />} title={t.clickPing(trigger)}
           description={t.clickPingDesc(trigger)}
-          checked={s.clickPing} onChange={(v) => void update({ clickPing: v })} dim={off} />
+          checked={s.clickPing} onChange={(v) => void update({ clickPing: v })} dim={grey.paused} />
         <SliderRow limit="pingSizePx" icon={<ResizeLarge24Regular />} title={t.pingSize} value={s.pingSizePx}
-          format={(v) => `${v} ${LENGTH_UNIT}`} onChange={(v) => void update({ pingSizePx: v })} dim={off} />
+          format={(v) => `${v} ${LENGTH_UNIT}`} onChange={(v) => void update({ pingSizePx: v })} dim={grey.paused} />
         <WheelEditor wheel={s.wheel} center={s.clickPingId} centerOn={s.clickPing} trigger={trigger} pool={pingPool}
           defaults={{ wheel: DEFAULT_WHEEL, center: DEFAULT_CLICK_PING }}
           labels={{ title: t.wheelTitle, desc: t.wheelDesc(trigger), poolTitle: t.allPings, poolDesc: t.allPingsDesc }}
-          onChange={(patch) => void update(pingPatch(patch))} onPreview={(id) => void api.previewPing(id)} dim={off} />
+          onChange={(patch) => void update(pingPatch(patch))} onPreview={(id) => void api.previewPing(id)} dim={grey.paused} />
 
         {featureOn(s, 'emotes') ? (
           <>
             <div className="section" id="emotes">{t.navEmotes}</div>
-            <EmoteSection settings={s} update={update} lengthUnit={LENGTH_UNIT} dim={off} />
+            <EmoteSection settings={s} update={update} lengthUnit={LENGTH_UNIT} grey={grey} />
           </>
         ) : null}
 
         {featureOn(s, 'rooms') ? (
           <>
             <div className="section" id="room">{t.navRoom}</div>
-            <RoomSection settings={s} update={update} dim={off} />
+            <RoomSection settings={s} update={update} grey={grey} />
           </>
         ) : null}
 

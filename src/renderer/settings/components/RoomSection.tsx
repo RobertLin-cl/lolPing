@@ -12,6 +12,7 @@ import { TAG_COLORS, readableTagRgb, tagColorCss, tagHex, tagRgbFromHex } from '
 import { clampNameInput } from '../../../shared/roomProtocol';
 import { LIMITS, type RoomTextStyle, type Settings } from '../../../shared/settings';
 import { api } from '../api';
+import type { GreyedRows } from '../greyedRows';
 import { useText } from '../text';
 import type { Update } from '../useAppState';
 import { useRoomState } from '../useRoomState';
@@ -173,11 +174,8 @@ function InRoom({ room, allowInternet }: { room: RoomState; allowInternet: boole
 const textStyleLabel = (t: Strings, style: RoomTextStyle): string =>
   style === 'window' ? t.roomTextStyleWindow : style === 'danmaku' ? t.roomTextStyleDanmaku : t.roomTextStyleSpot;
 
-/**
- * `dim`: lolPing is off. Joining, leaving, the name, colour, internet and rejoin still work then; the rows about
- * marks, text and keys grey out.
- */
-export function RoomSection({ settings: s, update, dim }: { settings: Settings; update: Update; dim: boolean }) {
+/** Joining, leaving, the name, colour, internet and rejoin still work while lolPing is off, so they never grey out. */
+export function RoomSection({ settings: s, update, grey }: { settings: Settings; update: Update; grey: GreyedRows }) {
   const t = useText();
   const room = useRoomState();
   const [textKeyError, setTextKeyError] = useState<string | null>(null);
@@ -212,20 +210,20 @@ export function RoomSection({ settings: s, update, dim }: { settings: Settings; 
       </SettingRow>
       {room.phase === 'idle' ? <JoinCard /> : <InRoom room={room} allowInternet={s.allowInternet} />}
       <SwitchRow icon={<SpeakerMute24Regular />} title={t.roomMute} description={t.roomMuteDesc}
-        checked={s.roomMuted} onChange={(v) => void update({ roomMuted: v })} dim={dim} />
+        checked={s.roomMuted} onChange={(v) => void update({ roomMuted: v })} dim={grey.paused} />
       {/* Mute room drops everything others send, so the limit and how their text shows do nothing then. */}
-      <SettingRow icon={<TopSpeed24Regular />} title={t.roomLimit} description={t.roomLimitDesc} dim={dim || s.roomMuted}>
+      <SettingRow icon={<TopSpeed24Regular />} title={t.roomLimit} description={t.roomLimitDesc} dim={grey.roomIncoming}>
         <Slider min={1} max={LIMIT_MAX + 1} step={1} value={toSlider(s.incomingPingLimit)} style={{ width: 200 }}
           onChange={(_, d) => void update({ incomingPingLimit: fromSlider(d.value) })} />
         <span className="value">{t.roomLimitValue(s.incomingPingLimit)}</span>
       </SettingRow>
       <SwitchRow icon={<Image24Regular />} title={t.friendEmotes} description={t.friendEmotesDesc}
-        checked={s.friendEmotes} onChange={(v) => void update({ friendEmotes: v })} dim={dim} />
+        checked={s.friendEmotes} onChange={(v) => void update({ friendEmotes: v })} dim={grey.paused} />
       <SwitchRow icon={<Globe24Regular />} title={t.roomInternet} description={t.roomInternetDesc}
         checked={s.allowInternet} onChange={(v) => void update({ allowInternet: v })} />
       {featureOn(s, 'roomText') ? (
         <>
-          <SettingRow icon={<Chat24Regular />} title={t.roomTextStyle} description={t.roomTextStyleDesc} dim={dim || s.roomMuted}>
+          <SettingRow icon={<Chat24Regular />} title={t.roomTextStyle} description={t.roomTextStyleDesc} dim={grey.roomIncoming}>
             <Dropdown style={{ minWidth: 170 }} value={textStyleLabel(t, s.roomTextStyle)} selectedOptions={[s.roomTextStyle]}
               onOptionSelect={(_, d) => {
                 const style = TEXT_STYLES.find((v) => v === d.optionValue);
@@ -235,8 +233,8 @@ export function RoomSection({ settings: s, update, dim }: { settings: Settings; 
             </Dropdown>
           </SettingRow>
           <SliderRow limit="chatHideS" icon={<Timer24Regular />} title={t.chatHide} description={t.chatHideDesc}
-            value={s.chatHideS} format={(v) => t.chatHideValue(v)} onChange={(v) => void update({ chatHideS: v })} dim={dim} />
-          <SettingRow icon={<Keyboard24Regular />} title={t.textShortcut} description={t.textShortcutDesc} dim={dim}>
+            value={s.chatHideS} format={(v) => t.chatHideValue(v)} onChange={(v) => void update({ chatHideS: v })} dim={grey.paused} />
+          <SettingRow icon={<Keyboard24Regular />} title={t.textShortcut} description={t.textShortcutDesc} dim={grey.paused}>
             <KeyCapture parts={hotkeyParts(s.textHotkey, api.platform)} requireModifier error={textKeyError}
               onCapture={async (c) => {
                 const result = await update({ textHotkey: c });
@@ -247,7 +245,7 @@ export function RoomSection({ settings: s, update, dim }: { settings: Settings; 
       ) : null}
       {featureOn(s, 'roomPanel') ? (
         <>
-          <SettingRow icon={<Keyboard24Regular />} title={t.panelKey} dim={dim}
+          <SettingRow icon={<Keyboard24Regular />} title={t.panelKey} dim={grey.paused}
             description={t.panelKeyDesc(vkLabel(s.panelKey, api.platform))}>
             <KeyCapture parts={[vkLabel(s.panelKey, api.platform)]} requireModifier={false} error={panelKeyError}
               onCapture={async (c) => {
@@ -256,11 +254,11 @@ export function RoomSection({ settings: s, update, dim }: { settings: Settings; 
               }} />
           </SettingRow>
           <SliderRow limit="panelHoldS" icon={<Timer24Regular />} title={t.panelHold} description={t.panelHoldDesc}
-            value={s.panelHoldS} format={(v) => t.panelHoldValue(v)} onChange={(v) => void update({ panelHoldS: v })} dim={dim} />
+            value={s.panelHoldS} format={(v) => t.panelHoldValue(v)} onChange={(v) => void update({ panelHoldS: v })} dim={grey.paused} />
         </>
       ) : null}
       <SwitchRow icon={<ArrowSync24Regular />} title={t.roomRejoin} checked={s.rejoinRoom} onChange={(v) => void update({ rejoinRoom: v })} />
-      <SettingRow icon={<Desktop24Regular />} title={t.roomDisplays} description={t.roomDisplaysDesc} dim={dim}>
+      <SettingRow icon={<Desktop24Regular />} title={t.roomDisplays} description={t.roomDisplaysDesc} dim={grey.paused}>
         <span className="displays">
           {room.displays.map((d) => (
             <span key={d.number}>#{d.number}{d.primary ? ` ${t.roomPrimary}` : ''} · {d.width}×{d.height}</span>

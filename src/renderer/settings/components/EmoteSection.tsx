@@ -13,6 +13,7 @@ import { separateAskKey, triggerLabel, type Settings } from '../../../shared/set
 import type { WheelPatch } from '../../../shared/wheelLayout';
 import { api } from '../api';
 import { prepareEmote, prepareSound } from '../emoteImport';
+import type { GreyedRows } from '../greyedRows';
 import { useText } from '../text';
 import type { Update } from '../useAppState';
 import { SettingRow, SliderRow, SwitchRow } from './rows';
@@ -124,9 +125,8 @@ function emotePatch(p: WheelPatch<EmoteRef>): Partial<Settings> {
   return patch;
 }
 
-/** `dim`: lolPing is off, so the whole section greys out. */
-export function EmoteSection({ settings: s, update, lengthUnit, dim }: {
-  settings: Settings; update: Update; lengthUnit: string; dim: boolean;
+export function EmoteSection({ settings: s, update, lengthUnit, grey }: {
+  settings: Settings; update: Update; lengthUnit: string; grey: GreyedRows;
 }) {
   const t = useText();
   const [keyError, setKeyError] = useState<string | null>(null);
@@ -196,7 +196,7 @@ export function EmoteSection({ settings: s, update, lengthUnit, dim }: {
 
   return (
     <>
-      <SettingRow icon={<Emoji24Regular />} title={t.emoteKey} dim={dim}
+      <SettingRow icon={<Emoji24Regular />} title={t.emoteKey} dim={grey.paused}
         description={(
           <>
             {keyOff ? t.emoteKeyOffDesc : t.emoteKeyDesc}
@@ -208,12 +208,12 @@ export function EmoteSection({ settings: s, update, lengthUnit, dim }: {
       </SettingRow>
       {keyError ? <div className="rowError" role="alert">{keyError}</div> : null}
       <SwitchRow icon={<CursorClick24Regular />} title={t.emoteClick(key)} description={t.emoteClickDesc(key)}
-        checked={s.emoteClick} onChange={(v) => void update({ emoteClick: v })} dim={dim || keyOff} />
+        checked={s.emoteClick} onChange={(v) => void update({ emoteClick: v })} dim={grey.emoteClick} />
       {/* The sizes stay live without an emote key: friends' emotes are drawn at them too. */}
       <SliderRow limit="emoteSizePx" icon={<ResizeLarge24Regular />} title={t.emoteSize} value={s.emoteSizePx}
-        format={(v) => `${v} ${lengthUnit}`} onChange={(v) => void update({ emoteSizePx: v })} dim={dim} />
+        format={(v) => `${v} ${lengthUnit}`} onChange={(v) => void update({ emoteSizePx: v })} dim={grey.paused} />
       <SliderRow limit="customEmoteSizePx" icon={<ResizeLarge24Regular />} title={t.customEmoteSize} description={t.customEmoteSizeDesc}
-        value={s.customEmoteSizePx} format={(v) => `${v} ${lengthUnit}`} onChange={(v) => void update({ customEmoteSizePx: v })} dim={dim} />
+        value={s.customEmoteSizePx} format={(v) => `${v} ${lengthUnit}`} onChange={(v) => void update({ customEmoteSizePx: v })} dim={grey.paused} />
       <WheelEditor wheel={s.emoteWheel} center={s.clickEmoteId} centerOn={s.emoteClick && !keyOff} trigger={key}
         pool={pool} poolExtra={importer} onDropFiles={importFiles}
         onFxPick={(id, fx) => void api.setEmoteFx(id, fx)}
@@ -221,7 +221,7 @@ export function EmoteSection({ settings: s, update, lengthUnit, dim }: {
         fxFor={(id) => s.customEmotes.find((c) => c.id === id)?.fx}
         defaults={{ wheel: DEFAULT_EMOTE_WHEEL, center: DEFAULT_CLICK_EMOTE }}
         labels={{ title: t.emoteWheelTitle, desc: t.emoteWheelDesc(key), poolTitle: t.allEmotes, poolDesc: t.allEmotesDesc }}
-        onChange={(patch) => void update(emotePatch(patch))} onPreview={(ref) => void api.previewEmote(ref)} dim={dim} />
+        onChange={(patch) => void update(emotePatch(patch))} onPreview={(ref) => void api.previewEmote(ref)} dim={grey.paused} />
     </>
   );
 }
