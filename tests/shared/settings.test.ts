@@ -606,7 +606,7 @@ describe('helpers', () => {
     expect(overlaySettings(DEFAULT_SETTINGS)).toEqual({
       pingSizePx: 110, pingDurationS: 3.2, keepLastPing: false, volume: 70, muted: false, tickSound: true,
       wheelSizePx: 600, wheel: ['danger', 'push', 'omw', 'allin', 'assist', 'needvision', 'missing', 'enemyvision'], clickPingId: 'generic',
-      emoteWheel: [...DEFAULT_EMOTE_WHEEL], clickEmoteId: DEFAULT_CLICK_EMOTE, emoteSizePx: 150, customEmoteSizePx: 300, emoteSound: true,
+      emoteWheel: [...DEFAULT_EMOTE_WHEEL], clickEmoteId: DEFAULT_CLICK_EMOTE, emoteSizePx: 150, customEmoteSizePx: 300, emoteSound: true, summonerSound: true,
       customEmotes: [],
       lang: 'en',
       ask: {

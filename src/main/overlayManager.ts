@@ -6,6 +6,7 @@ import {
 } from '../shared/ipc';
 import { WHEEL, pickSlice } from '../shared/geometry';
 import { isPingId, type PingId } from '../shared/pings';
+import type { SummonerSpellId } from '../shared/summonerSpells';
 import type { HelperEvent, WheelKind } from '../shared/protocol';
 import { emoteSizeFor, type OverlaySettings, type OverlayTextStyle } from '../shared/settings';
 import type { Rect } from '../shared/teammate/coords';
@@ -237,6 +238,11 @@ export class OverlayManager extends EventEmitter {
       default:
         break;
     }
+  }
+
+  /** Sound only, on one overlay: no visual mark, display wake or duplicate on another monitor. */
+  playSummoner(spell: SummonerSpellId): void {
+    this.send(screen.getPrimaryDisplay().id, 'summoner:cast', { spell });
   }
 
   previewPing(id: PingId): void {

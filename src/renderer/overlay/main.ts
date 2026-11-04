@@ -16,6 +16,7 @@ import { EmoteStage } from './emoteStage';
 import { GlowStage } from './glowFx';
 import { IdleWatch } from './idleWatch';
 import { spawnPing } from './pingFx';
+import { playSummonerSound, summonerSoundEntries } from './summonerSound';
 import { SoundBank } from './soundBank';
 import { showToast } from './toast';
 import { TextStage } from './textFx';
@@ -170,6 +171,7 @@ window.overlay.on('ping:spawn', (p) => {
   if (p.owner === 'mate' && staleMate(p)) return;
   ping(pingById(p.id) ?? fallbackPing, p.x, p.y, p.tag, p.keep === true, p);
 });
+window.overlay.on('summoner:cast', ({ spell }) => playSummonerSound(sounds, settings, spell));
 window.overlay.on('ping:unkeep', dropKeptPing);
 window.overlay.on('emote:spawn', (p) => {
   if (p.owner === 'mate' && staleMate(p)) return;
@@ -232,6 +234,7 @@ function checkImages(): Promise<string[]> {
 }
 
 const soundEntries = [
+  ...summonerSoundEntries,
   ...allSoundNames().map((name) => ({ key: name, url: soundUrl(name) })),
   ...EMOTE_CATALOG.filter((e) => e.hasSound).map((e) => ({ key: `emote:${e.slug}`, url: emoteSoundUrl(e.slug) })),
 ];

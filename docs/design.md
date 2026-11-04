@@ -438,7 +438,7 @@ panel feature is not required. Both slots open one shared League-style icon grid
 checkmark and their D/F key. Picking the other slot's spell swaps D and F in one settings update
 (`selectSummonerSpell`); picking the current spell leaves the pair unchanged. Options also grey out while paused
 or after helper failure, and the sound row greys out under global mute. Mute room does not grey local spell choices or sounds. English, Simplified Chinese and Traditional Chinese names come from
-CommunityDragon. Cast sound playback is added separately.
+CommunityDragon.
 
 Windows enables passive summoner key support in its hook layer; macOS and Linux never enable it. The helper's
 version 8 config adds `summonerKeys`, set only while the feature is on in an active room and lolPing is enabled.
@@ -450,7 +450,7 @@ text input suspends gestures, so typing can cast too. Main ignores casts during 
 `src/main/summonerSession.ts` applies accepted events to the shared cooldown logic with injected time.
 The local state is kept in memory: leave, feature off, room change, spell change and app restart reset
 both slots. Pausing input and restarting the helper keep cooldowns. Room mute does not stop local casts.
-Casting emits no chat line. The panel shows its cooldown; cast sound playback is not wired yet.
+Casting emits no chat line. The panel shows its cooldown and the local caster hears its sound.
 
 Signed presence now carries optional `spells` with both slot IDs, charge recharge end times and Smite's cast-gap
 end time. `RoomManager.setSummoners` updates our own room state and announces a changed immutable snapshot.
@@ -487,6 +487,13 @@ Right-click sends a separate clear request and does not post a line. Main checks
 platform and enabled spell feature, then clears only that local slot and announces the new presence. Clearing
 Smite restores both charges and its cast gap; the other slot is preserved. The renderer never supplies a
 cooldown snapshot to be trusted by main.
+
+After a successful local cast, main sends `summoner:cast` to the primary display's overlay only. It is not a
+raising channel: sound does not move, show or wake an otherwise idle overlay. Presence, remote spell reports,
+settings changes and cooldown clears never take this path. The renderer preloads all eleven bundled WAVs into
+the existing SoundBank and includes failed loads in its normal missing-asset report. Playback reads the current
+`summonerSound` switch, global mute and volume; room mute does not silence local casts. The shared eight-voice
+limit still applies. No new audio engine, window, network host or download is needed.
 
 ### Whispers (this fork)
 

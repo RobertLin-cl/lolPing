@@ -6,6 +6,7 @@ import type { Platform } from './platform';
 import type { HelperStatus, WheelKind } from './protocol';
 import type { JoinResult, RoomState, RoomStateCore } from './room';
 import { isTagColor, isTagRgb, type TagRgb } from './roomColors';
+import type { SummonerSpellId } from './summonerSpells';
 import type { HistoryLine } from './roomHistory';
 import { PEER_RE } from './roomProtocol';
 import type { OverlaySettings, OverlayTextStyle, Settings } from './settings';
@@ -49,6 +50,8 @@ export interface OverlayEvents {
     owner: string; art: EmoteArt; tag?: PingTag; ticket?: string; keep?: boolean; silent?: boolean; scale?: number;
   };
   'emote:clear': { owner: string };
+  /** An accepted local cast, sent to one overlay for sound only. Never sent for a peer's presence. */
+  'summoner:cast': { spell: SummonerSpellId };
   'toast:show': { title: string; body: string };
   /** `owner` is 'self' or a room member: each owner has at most 3 lines on screen. */
   'text:spawn': Point & { text: string; owner: string; style: OverlayTextStyle; tag?: PingTag };
@@ -93,7 +96,7 @@ export interface MateMark {
 export type OverlayChannel = keyof OverlayEvents;
 
 export const OVERLAY_CHANNELS: readonly OverlayChannel[] = [
-  'overlay:settings', 'wheel:open', 'wheel:move', 'wheel:release', 'wheel:cancel', 'ping:spawn', 'ping:unkeep', 'emote:spawn', 'emote:clear',
+  'overlay:settings', 'wheel:open', 'wheel:move', 'wheel:release', 'wheel:cancel', 'ping:spawn', 'ping:unkeep', 'emote:spawn', 'emote:clear', 'summoner:cast',
   'toast:show', 'text:spawn', 'mate:clear', 'mate:fade', 'mate:ticket', 'mate:said', 'mate:glow',
 ];
 

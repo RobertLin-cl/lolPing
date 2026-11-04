@@ -457,7 +457,7 @@ export function triggerLabel(t: TriggerKey, lang: Lang = 'en', platform: Platfor
 export type OverlaySettings = Pick<
   Settings,
   'pingSizePx' | 'pingDurationS' | 'keepLastPing' | 'volume' | 'muted' | 'tickSound' | 'wheelSizePx' | 'wheel' | 'clickPingId'
-  | 'emoteWheel' | 'clickEmoteId' | 'emoteSizePx' | 'customEmoteSizePx' | 'emoteSound' | 'customEmotes'
+  | 'emoteWheel' | 'clickEmoteId' | 'emoteSizePx' | 'customEmoteSizePx' | 'emoteSound' | 'summonerSound' | 'customEmotes'
 > & {
   /** The app's language: the page takes it as its own, so Chinese text gets that script's fonts. */
   lang: Lang;
@@ -478,7 +478,7 @@ export const overlaySettings = (s: Settings, lang: Lang = 'en'): OverlaySettings
   pingSizePx: s.pingSizePx, pingDurationS: s.pingDurationS, keepLastPing: s.keepLastPing, volume: s.volume, muted: s.muted, tickSound: s.tickSound,
   wheelSizePx: s.wheelSizePx, wheel: [...s.wheel], clickPingId: s.clickPingId,
   emoteWheel: [...s.emoteWheel], clickEmoteId: s.clickEmoteId, emoteSizePx: s.emoteSizePx, customEmoteSizePx: s.customEmoteSizePx,
-  emoteSound: s.emoteSound, customEmotes: s.customEmotes.map((c) => ({ ...c })),
+  emoteSound: s.emoteSound, summonerSound: s.summonerSound, customEmotes: s.customEmotes.map((c) => ({ ...c })),
   lang,
   ask: askWheel(s, lang),
 });

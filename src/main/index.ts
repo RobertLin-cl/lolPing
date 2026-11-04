@@ -17,7 +17,7 @@ import { featureOn, liveKeys, roomFeaturesOff } from '../shared/features';
 import { linkedHd } from '../shared/hdLink';
 import { hotkeyLabel } from '../shared/keys';
 import { LOGO_TEXTURE } from '../shared/pings';
-import { activateCommand, configCommand, type HelperStatus } from '../shared/protocol';
+import { activateCommand, configCommand, type HelperEvent, type HelperStatus } from '../shared/protocol';
 import type { RoomMember, RoomState } from '../shared/room';
 import type { VoteKind } from '../shared/roomProtocol';
 import { formatRoomCode, parseRoomCode } from '../shared/roomCode';
@@ -828,12 +828,18 @@ function start(): void {
       console.warn('[text]', err);
     }
   };
-  bridge.on('event', (ev) => {
+  bridge.on('event', (ev: HelperEvent) => {
     if (ev.type === 'toggled') setEnabled(ev.enabled);
     else if (ev.type === 'textRequested') openText();
     else if (ev.type === 'summonerCast') {
       syncSummoners();
-      if (summoners.cast(ev.slot, live.spells && enabled && !capturing)) room.setSummoners(summoners.state());
+      if (summoners.cast(ev.slot, live.spells && enabled && !capturing)) {
+        const state = summoners.state();
+        if (state) {
+          room.setSummoners(state);
+          overlays.playSummoner(state[ev.slot].spell);
+        }
+      }
     } else if (ev.type === 'panel') {
       if (ev.show) panelHold.down();
       else panelHold.up();

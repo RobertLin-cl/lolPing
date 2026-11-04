@@ -131,6 +131,18 @@ beforeEach(async () => {
   mgr.start();
 });
 
+describe('OverlayManager summoner sounds', () => {
+  it('sends one sound to the primary display without waking or drawing on either overlay', () => {
+    for (const w of h.windows) w.emit('ready-to-show');
+    const before = h.windows.map(w => ({ bounds: { ...w.bounds }, visible: w.visible, onTop: [...w.onTop] }));
+    for (const w of h.windows) w.webContents.send.mockClear();
+    mgr.playSummoner('flash');
+    expect(sent(0)).toEqual([['summoner:cast', { spell: 'flash' }]]);
+    expect(sent(1)).toEqual([]);
+    expect(h.windows.map(w => ({ bounds: w.bounds, visible: w.visible, onTop: w.onTop }))).toEqual(before);
+  });
+});
+
 describe('OverlayManager wheels', () => {
   it('forwards the open wheel\'s kind with every move and the release', () => {
     mgr.handle({ type: 'wheelOpen', x: 100, y: 200, wheel: 'emote' });
