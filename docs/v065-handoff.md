@@ -18,7 +18,8 @@ The standalone Summoner spells section sits below Emotes, with its own default-o
 
 The original 0.6.5 implementation and the additional chat notification cue are complete and accepted by the maintainer. The sound segment committed with this handoff adds own-cast sound through one
 existing overlay SoundBank, with live volume, global mute and the summoner sound switch. Peer presence, reports
-and clears never play cast sound. The room protocol stays at version 1 and the app version has not been changed.
+and clears never play cast sound. The room protocol stays at version 1. The maintainer authorized the version
+bump and publication of 0.6.5 on 2026-11-04.
 
 ## Chat cue addition (2026-11-04)
 
