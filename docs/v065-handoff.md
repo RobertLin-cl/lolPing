@@ -16,9 +16,21 @@ Updated: 2026-11-04. Branch: `local/hardened`.
 
 The standalone Summoner spells section sits below Emotes, with its own default-off switch, D/F choices and local sound switch. Its options remain visible but inert and grey while off. Rooms must be enabled; the room panel feature is not required. D defaults to Heal, F to Flash. There is no separate summoner switch in the Rooms expander or sound row in the Sound section.
 
-The 0.6.5 implementation is complete in code. The sound segment committed with this handoff adds own-cast sound through one
+The original 0.6.5 implementation and the additional chat notification cue are complete and accepted by the maintainer. The sound segment committed with this handoff adds own-cast sound through one
 existing overlay SoundBank, with live volume, global mute and the summoner sound switch. Peer presence, reports
 and clears never play cast sound. The room protocol stays at version 1 and the app version has not been changed.
+
+## Chat cue addition (2026-11-04)
+
+- The Sound section now has a shared Chat and scoreboard sounds switch, default off for new, old and damaged settings. It controls the new cue only, with immediate effect on subsequent messages; global volume, mute and category filters still apply. All three UI languages are included.
+- Final switch verification: typecheck, desktop build, all 149 test files (2268 passed, 11 skipped), 742 helper tests and 533 context tests passed. The complete regression was rerun with child-process permissions and passed, superseding the earlier timeout below.
+- The user will handle manual acceptance. New visible text, whispers and scoreboard reports (own and incoming) now notify once; filtered messages are silent. The maintainer chose to share the same clip across chat and scoreboard rather than add a separate All Chat clip. Existing ping/vote audio remains; command notes receive no extra cue.
+- The original Team Chat clip was found in the cached HUD_Global banks, event `Play_sfx_hud_base_Chat_Team` / media 933622047. It is bundled as `assets/ui/chat-message.wav` and reproducible through `--chat-sounds`. No additional WAD or tool download was needed.
+- Original asset data identifies Team/All Chat cues but does not expose the engine's complete per-message trigger rules. The implemented text/whisper mapping is stated explicitly rather than claiming exact game parity for every system row.
+- A history push drives the notification; history rereads, filter changes and redraws never replay it. It follows global volume, mute and pause, through only one existing overlay.
+- Verification: typecheck passed; 742 helper and 533 context tests passed; full TypeScript regression passed with 149 files, 2266 tests passed and 11 skipped. All 10 asset extraction tests passed. Desktop and browser demo builds passed, with the 34,714-byte chat WAV included in desktop output.
+- Manual listening and interaction checks for this addition are left to the user as requested. No chat was sent to a user room by automated checks.
+- After extending the shared cue to scoreboard reports: typecheck and 93 focused tests passed. Full regression had 2265 passed, 11 skipped and one AgentRunner process-tree cancellation timeout with an EBUSY cleanup error; rerunning that file with child-process permissions passed all 23 tests (one skipped). The updated development app was restarted for user acceptance.
 
 ## Next work, in order
 
@@ -26,7 +38,7 @@ and clears never play cast sound. The room protocol stays at version 1 and the a
    - Foreground fullscreen application: with gameCheck on, bare D/F must still type/pass through but not cast; with it off, casting resumes. Native automated tests pass, but no live fullscreen takeover was done while the user was operating the app.
    - macOS/Linux real-app inspection of peer icons and clicks is still needed on those operating systems. Local D/F casting remains Windows-only and platform tests pass.
    - User listening feedback on actual sound quality is still useful; real Web Audio decoding, playback source creation and gain were verified, but the agent does not hear the speakers.
-2. Commit, push and release only when the maintainer asks. The sound segment is committed with this handoff. Do not bump the package version or change release workflows on your own.
+2. The maintainer approved publication of 0.6.5 on 2026-11-04 after accepting the chat sound switch. Follow the existing tag-driven release workflow; no workflow change is needed.
 
 The original agreed requirements and game sentence keys are in the earlier handoff and `v065-requirements.md` under the user's Claude project memory. The later UI and filter decisions above supersede their original placement instructions.
 

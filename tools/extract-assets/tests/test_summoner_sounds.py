@@ -14,10 +14,10 @@ def section(tag, body):
     return tag + struct.pack('<I', len(body)) + body
 
 
-def banks():
+def banks(sounds=SUMMONER_SOUNDS, events=None, audio=None):
     objects = []
     media = []
-    for index, event in enumerate(SUMMONER_SOUNDS.values()):
+    for index, event in enumerate(sounds.values()):
         action, sound, source = 3000 + index, 4000 + index, 5000 + index
         objects += [
             (assets.EVENT, assets.fnv1_32(event), bytes([1]) + struct.pack('<I', action)),
@@ -29,8 +29,8 @@ def banks():
         struct.pack('<BII', kind, len(body) + 4, oid) + body for kind, oid, body in objects
     )
     return {
-        assets.BANK_DIR + 'misc_gameplay_sfx_events.bnk': section(b'HIRC', hirc),
-        assets.BANK_DIR + 'misc_gameplay_sfx_audio.bnk': section(b'DIDX', b''.join(media)) + section(b'DATA', bytes(11)),
+        (events or assets.BANK_DIR + 'misc_gameplay_sfx_events.bnk'): section(b'HIRC', hirc),
+        (audio or assets.BANK_DIR + 'misc_gameplay_sfx_audio.bnk'): section(b'DIDX', b''.join(media)) + section(b'DATA', bytes(len(sounds))),
     }
 
 
@@ -69,6 +69,22 @@ class SummonerSoundTests(unittest.TestCase):
             self.assertEqual({file.stem for file in output.glob('*.wav')}, set(SUMMONER_SOUNDS))
             self.assertTrue(all((output / f'{name}.wav').read_bytes() == name.encode() for name in SUMMONER_SOUNDS))
             self.assertFalse(list(output.glob('*.tmp')))
+
+    def test_extracts_the_team_chat_event_from_the_hud_bank_without_changing_other_ui_assets(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            output = root / 'assets' / 'ui'
+            output.mkdir(parents=True)
+            (output / 'ready-intro.ogg').write_bytes(b'previous')
+            def decode(media, ids, dest, vgmstream, tmp):
+                dest.write_bytes(b'chat')
+            source = banks({'chat-message': 'Play_sfx_hud_base_Chat_Team'}, assets.EVENTS_BANK, assets.AUDIO_BANK)
+            with patch.object(assets, 'REPO', root), patch.object(assets, 'wad_read', return_value=source), \
+                    patch.object(assets.shutil, 'which', return_value='available'), \
+                    patch.object(assets, 'decode_and_mix', side_effect=decode):
+                assets.extract_chat_sounds(root, 'vgmstream')
+            self.assertEqual((output / 'chat-message.wav').read_bytes(), b'chat')
+            self.assertEqual((output / 'ready-intro.ogg').read_bytes(), b'previous')
 
     def test_names_the_summoner_bank_when_an_event_is_missing(self):
         with self.assertRaisesRegex(SystemExit, 'summoner-bank'):

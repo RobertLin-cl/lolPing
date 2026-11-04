@@ -219,6 +219,9 @@ function SettingsPage({ settings: s, status, update }: { settings: Settings; sta
         ) : null}
         <SwitchRow icon={<MusicNote224Regular />} title={t.tickSound} description={t.tickSoundDesc}
           checked={s.tickSound} onChange={(v) => void update({ tickSound: v })} dim={grey.sound} />
+        <SwitchRow icon={<Speaker224Regular />} title={t.chatSound} description={t.chatSoundDesc}
+          checked={s.chatSound} onChange={(v) => void update({ chatSound: v })}
+          dim={grey.sound || !featureOn(s, 'roomText')} />
 
         <div className="section" id="wheel">{t.navWheel}</div>
         <SliderRow limit="wheelSizePx" icon={<ResizeLarge24Regular />} title={t.wheelSize} description={t.wheelSizeDesc}

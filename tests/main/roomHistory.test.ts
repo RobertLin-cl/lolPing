@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { shouldPlayChatSound } from '../../src/shared/chatSound';
+import { DEFAULT_CHAT_FILTER } from '../../src/shared/chatFilter';
 import { RoomHistory } from '../../src/main/roomHistory';
 import type { HistoryLine } from '../../src/shared/roomHistory';
 
@@ -26,6 +28,31 @@ describe('RoomHistory', () => {
     history.push(line(1));
     history.push(line(2));
     expect(seen).toEqual([1, 2]);
+  });
+
+  it('notifies once for each new visible message and never replays sounds when history or filters are reread', () => {
+    let filter = { ...DEFAULT_CHAT_FILTER };
+    const heard: string[] = [];
+    const history = new RoomHistory(line => { if (shouldPlayChatSound(line, filter, true)) heard.push(line.text); });
+    history.push(line(1));
+    expect(heard).toEqual(['line 1']);
+    history.lines();
+    filter = { ...filter, text: false };
+    history.push(line(2));
+    filter = { ...filter, text: true };
+    history.lines();
+    expect(history.lines()).toHaveLength(2);
+    expect(heard).toEqual(['line 1']);
+    history.push({ ...line(3), kind: 'whisperFrom' });
+    history.push({ ...line(4), kind: 'spell' });
+    filter = { ...filter, scoreboard: false };
+    history.push({ ...line(5), kind: 'alive' });
+    history.push({ ...line(6), kind: 'spell' });
+    filter = { ...filter, scoreboard: true };
+    history.lines();
+    history.push({ ...line(7), kind: 'alive' });
+    history.clear();
+    expect(heard).toEqual(['line 1', 'line 3', 'line 4', 'line 7']);
   });
 
   it('empties on clear', () => {

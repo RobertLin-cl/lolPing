@@ -131,7 +131,16 @@ beforeEach(async () => {
   mgr.start();
 });
 
-describe('OverlayManager summoner sounds', () => {
+describe('OverlayManager sound notifications', () => {
+  it('plays a chat cue on one display without raising or moving idle overlays', () => {
+    for (const w of h.windows) w.emit('ready-to-show');
+    const before = h.windows.map(w => ({ bounds: { ...w.bounds }, visible: w.visible, onTop: [...w.onTop] }));
+    for (const w of h.windows) w.webContents.send.mockClear();
+    mgr.playChatMessage();
+    expect(sent(0)).toEqual([['chat:message', null]]);
+    expect(sent(1)).toEqual([]);
+    expect(h.windows.map(w => ({ bounds: w.bounds, visible: w.visible, onTop: w.onTop }))).toEqual(before);
+  });
   it('sends one sound to the primary display without waking or drawing on either overlay', () => {
     for (const w of h.windows) w.emit('ready-to-show');
     const before = h.windows.map(w => ({ bounds: { ...w.bounds }, visible: w.visible, onTop: [...w.onTop] }));

@@ -240,6 +240,11 @@ export class OverlayManager extends EventEmitter {
     }
   }
 
+  /** A chat notification on one display, without raising or moving the overlay. */
+  playChatMessage(): void {
+    this.send(screen.getPrimaryDisplay().id, 'chat:message', null);
+  }
+
   /** Sound only, on one overlay: no visual mark, display wake or duplicate on another monitor. */
   playSummoner(spell: SummonerSpellId): void {
     this.send(screen.getPrimaryDisplay().id, 'summoner:cast', { spell });

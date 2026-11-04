@@ -52,6 +52,8 @@ export interface OverlayEvents {
   'emote:clear': { owner: string };
   /** An accepted local cast, sent to one overlay for sound only. Never sent for a peer's presence. */
   'summoner:cast': { spell: SummonerSpellId };
+  /** A new visible text, whisper or scoreboard report. Played once on the primary overlay. */
+  'chat:message': null;
   'toast:show': { title: string; body: string };
   /** `owner` is 'self' or a room member: each owner has at most 3 lines on screen. */
   'text:spawn': Point & { text: string; owner: string; style: OverlayTextStyle; tag?: PingTag };
@@ -96,7 +98,7 @@ export interface MateMark {
 export type OverlayChannel = keyof OverlayEvents;
 
 export const OVERLAY_CHANNELS: readonly OverlayChannel[] = [
-  'overlay:settings', 'wheel:open', 'wheel:move', 'wheel:release', 'wheel:cancel', 'ping:spawn', 'ping:unkeep', 'emote:spawn', 'emote:clear', 'summoner:cast',
+  'overlay:settings', 'wheel:open', 'wheel:move', 'wheel:release', 'wheel:cancel', 'ping:spawn', 'ping:unkeep', 'emote:spawn', 'emote:clear', 'summoner:cast', 'chat:message',
   'toast:show', 'text:spawn', 'mate:clear', 'mate:fade', 'mate:ticket', 'mate:said', 'mate:glow',
 ];
 

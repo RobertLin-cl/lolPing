@@ -105,6 +105,22 @@ py -3.14 tools/extract-assets/extract_assets.py --league "C:/Riot Games/League o
 
 The crop boxes were measured from the decoded atlases. After a patch that moves things in an atlas, decode it again and check each piece.
 
+## Chat message sound
+
+The original team-chat event `Play_sfx_hud_base_Chat_Team` resolves to embedded media 933622047 in
+`HUD_Global_events.bnk` / `HUD_Global_audio.bnk` in Common.wad.client. `--chat-sounds` decodes it through
+the same Wwise walker, vgmstream and FFmpeg pipeline into `assets/ui/chat-message.wav` (44.1 kHz stereo PCM,
+about 0.196 s). It reuses a local game install or the existing cached WAD; it downloads nothing.
+
+```bash
+py -3.14 tools/extract-assets/extract_assets.py --chat-sounds --league "C:/Riot Games/League of Legends" --vgmstream C:/tools/vgmstream/vgmstream-cli.exe
+```
+
+The game also lists a separate All Chat event; the maintainer chose to share the team cue across chat and
+scoreboard reports. The asset/event data confirms the original clips, not the engine's complete rules for
+every chat row. lolPing maps visible typed text, both whisper directions and scoreboard reports to this cue
+and keeps other existing sound behavior. Command notes receive no extra cue.
+
 ## Emotes
 
 `assets/emotes/` and `src/shared/emoteCatalog.ts` are generated from League's summoner-emote effect files by `emote_bake.py`. Each emote is baked into a 320×320 animated WebP (3 s, 30 fps, played once) that matches the in-game animation.

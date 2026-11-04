@@ -47,6 +47,7 @@ import {
 } from './paths';
 import { deriveRoomKeys } from './roomCrypto';
 import { RoomHistory } from './roomHistory';
+import { shouldPlayChatSound } from '../shared/chatSound';
 import { DEFAULT_SUMMONER_STATE } from '../shared/summonerSpells';
 import { summonerText } from '../shared/summonerText';
 import { SummonerSession } from './summonerSession';
@@ -494,7 +495,8 @@ function start(): void {
     if (shared) room.sendEmote(p.ref, shared, fx);
   });
   // This session's room lines: members' text and alive lines while the text feature is on, and our own.
-  const history = new RoomHistory(() => {
+  const history = new RoomHistory((line) => {
+    if (enabled && shouldPlayChatSound(line, settings.chatFilter, settings.chatSound)) overlays.playChatMessage();
     refreshRoster();
     chatLinesChanged();
   });

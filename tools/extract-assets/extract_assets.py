@@ -203,19 +203,30 @@ def extract_ui(league: Path) -> None:
 def extract_summoner_sounds(league: Path, vgmstream: str) -> None:
     from summoner_assets import SUMMONER_SOUNDS
 
+    extract_bank_sounds(league, vgmstream, SUMMONER_SOUNDS, REPO / 'assets' / 'summoners',
+                        BANK_DIR + 'misc_gameplay_sfx_events.bnk', BANK_DIR + 'misc_gameplay_sfx_audio.bnk')
+
+
+# Team chat event and its embedded media are in HUD_Global; All Chat has a separate event not used by rooms.
+CHAT_SOUNDS = {'chat-message': 'Play_sfx_hud_base_Chat_Team'}
+
+
+def extract_chat_sounds(league: Path, vgmstream: str) -> None:
+    extract_bank_sounds(league, vgmstream, CHAT_SOUNDS, REPO / 'assets' / 'ui', EVENTS_BANK, AUDIO_BANK)
+
+
+def extract_bank_sounds(league: Path, vgmstream: str, sounds: dict[str, str], output: Path,
+                        events: str, audio: str) -> None:
     if shutil.which('ffmpeg') is None:
         raise SystemExit('ffmpeg not found on PATH')
     if shutil.which(vgmstream) is None:
         raise SystemExit('vgmstream-cli not found; pass --vgmstream with its path')
-    events = BANK_DIR + 'misc_gameplay_sfx_events.bnk'
-    audio = BANK_DIR + 'misc_gameplay_sfx_audio.bnk'
     files = wad_read(league / WAD_REL, [events, audio])
     objs, media = parse_hirc(files[events]), parse_media(files[audio])
-    clips = {name: event_media(objs, event, events) for name, event in SUMMONER_SOUNDS.items()}
+    clips = {name: event_media(objs, event, events) for name, event in sounds.items()}
     for name, ids in clips.items():
         if not ids or any(wid not in media for wid in ids):
-            raise SystemExit(f'{name}: event has no usable embedded media in {audio}; no summoner sounds written')
-    output = REPO / 'assets' / 'summoners'
+            raise SystemExit(f'{name}: event has no usable embedded media in {audio}; no sounds written')
     output.mkdir(parents=True, exist_ok=True)
     # A failed decode leaves every previous sound intact, rather than shipping a partly updated set.
     with tempfile.TemporaryDirectory() as td:
@@ -230,7 +241,7 @@ def extract_summoner_sounds(league: Path, vgmstream: str) -> None:
                 pending.replace(output / f'{name}.wav')
             finally:
                 pending.unlink(missing_ok=True)
-            print('summoner sound', name)
+            print('sound', name)
 
 
 # ---- xxHash64 (WAD path hashes) ----
@@ -490,8 +501,14 @@ def main() -> None:
                     help='with --emotes: draw the emote halos at this opacity instead of emote_bake.GLOW_OPACITY')
     ap.add_argument('--summoner-icons', action='store_true', help='download only the eleven summoner spell PNG icons')
     ap.add_argument('--summoner-patch', default='latest', help='CommunityDragon patch for summoner icons, e.g. 16.21')
+    ap.add_argument('--chat-sounds', action='store_true', help='with --league: extract the original team-chat cue')
     ap.add_argument('--summoner-sounds', action='store_true', help='with --league: extract only summoner spell sounds')
     args = ap.parse_args()
+    if args.chat_sounds and not args.league:
+        ap.error('--chat-sounds needs --league')
+    if args.chat_sounds:
+        extract_chat_sounds(args.league, args.vgmstream)
+        return
     if args.summoner_sounds and not args.league:
         ap.error('--summoner-sounds needs --league')
     if args.summoner_icons:

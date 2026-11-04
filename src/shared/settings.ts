@@ -90,6 +90,7 @@ export interface Settings {
   /** How wide imported emotes appear, ours and room members' alike, and the "?" that stands in for a missing one. */
   customEmoteSizePx: number;
   emoteSound: boolean;
+  chatSound: boolean;
   summonerSound: boolean;
   summonerD: SummonerSpellId;
   summonerF: SummonerSpellId;
@@ -162,6 +163,7 @@ export const DEFAULT_SETTINGS: Settings = {
   emoteSizePx: 150,
   customEmoteSizePx: 300,
   emoteSound: true,
+  chatSound: false,
   summonerSound: true,
   summonerD: 'heal',
   summonerF: 'flash',
@@ -193,7 +195,7 @@ export const LIMITS = {
 
 type NumKey = keyof typeof LIMITS;
 type BoolKey = 'enabledOnStart' | 'clickPing' | 'gameCheck' | 'keepLastPing' | 'muted' | 'tickSound' | 'launchAtStartup' | 'allowInternet' | 'rejoinRoom' | 'roomMuted'
-  | 'emoteClick' | 'emoteSound' | 'summonerSound' | 'friendEmotes' | 'autoUpdateCheck';
+  | 'emoteClick' | 'emoteSound' | 'chatSound' | 'summonerSound' | 'friendEmotes' | 'autoUpdateCheck';
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const isVk = (v: unknown): v is number => Number.isInteger(v) && (v as number) >= 1 && (v as number) <= 254;
@@ -410,6 +412,7 @@ export function normalizeSettings(raw: unknown, platform: Platform = 'win', iden
     emoteSizePx: num(r.emoteSizePx, 'emoteSizePx'),
     customEmoteSizePx: num(r.customEmoteSizePx, 'customEmoteSizePx'),
     emoteSound: bool(r.emoteSound, 'emoteSound'),
+    chatSound: bool(r.chatSound, 'chatSound'),
     summonerSound: bool(r.summonerSound, 'summonerSound'),
     summonerD, summonerF,
     customEmotes: custom,

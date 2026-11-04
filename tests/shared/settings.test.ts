@@ -10,6 +10,16 @@ import {
 import type { AskTrigger } from '../../src/shared/teammate/settings';
 
 describe('normalizeSettings', () => {
+  it('defaults chat sounds off for old or damaged settings and saves an explicit choice', () => {
+    expect(DEFAULT_SETTINGS.chatSound).toBe(false);
+    for (const chatSound of [undefined, null, 'true', 1, {}, []]) {
+      expect(normalizeSettings({ chatSound }).chatSound).toBe(false);
+    }
+    const enabled = mergeSettings(normalizeSettings({}), rendererPatch({ chatSound: true }));
+    expect(enabled.chatSound).toBe(true);
+    expect(normalizeSettings(JSON.parse(JSON.stringify(enabled))).chatSound).toBe(true);
+    expect(mergeSettings(enabled, { chatSound: false }).chatSound).toBe(false);
+  });
   it('shows all chat categories for old settings and fills damaged entries independently', () => {
     expect(normalizeSettings({}).chatFilter).toEqual({ text: true, ping: true, scoreboard: true, vote: true, whisper: true });
     expect(normalizeSettings({ chatFilter: { ping: false, text: 'no', scoreboard: null } }).chatFilter)

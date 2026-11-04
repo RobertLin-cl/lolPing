@@ -1,3 +1,4 @@
+import { CHAT_MESSAGE_SOUND } from '../../shared/chatSound';
 import { EMOTE_CATALOG } from '../../shared/emoteCatalog';
 import {
   CUSTOM_EMOTE_URL, allEmoteAssetFiles, catalogEmote, customAnimUrl, customHash, customHdUrl, customSoundUrl, emoteSoundUrl,
@@ -171,6 +172,7 @@ window.overlay.on('ping:spawn', (p) => {
   if (p.owner === 'mate' && staleMate(p)) return;
   ping(pingById(p.id) ?? fallbackPing, p.x, p.y, p.tag, p.keep === true, p);
 });
+window.overlay.on('chat:message', () => sounds.play(CHAT_MESSAGE_SOUND.key, volume()));
 window.overlay.on('summoner:cast', ({ spell }) => playSummonerSound(sounds, settings, spell));
 window.overlay.on('ping:unkeep', dropKeptPing);
 window.overlay.on('emote:spawn', (p) => {
@@ -234,6 +236,7 @@ function checkImages(): Promise<string[]> {
 }
 
 const soundEntries = [
+  CHAT_MESSAGE_SOUND,
   ...summonerSoundEntries,
   ...allSoundNames().map((name) => ({ key: name, url: soundUrl(name) })),
   ...EMOTE_CATALOG.filter((e) => e.hasSound).map((e) => ({ key: `emote:${e.slug}`, url: emoteSoundUrl(e.slug) })),
