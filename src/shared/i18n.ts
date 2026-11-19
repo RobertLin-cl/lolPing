@@ -2708,7 +2708,11 @@ const withMateUi = (base: Strings, ui: Partial<Strings['teammate']['ui']>,
 });
 
 const TABLES: Record<Platform, Record<Lang, Strings>> = {
-  win: { en, 'zh-CN': zh, 'zh-TW': zhTw },
+  win: {
+    en: { ...en, customKeyNote: 'This key reaches other apps immediately, even while using the wheel' },
+    'zh-CN': { ...zh, customKeyNote: '此键会立即传给其他应用，使用轮盘时也一样' },
+    'zh-TW': { ...zhTw, customKeyNote: '此鍵會立即傳給其他程式，使用輪盤時也一樣' },
+  },
   linux: {
     en: { ...en, ...LINUX.en }, 'zh-CN': { ...zh, ...LINUX['zh-CN'] }, 'zh-TW': { ...zhTw, ...LINUX['zh-TW'] },
   },

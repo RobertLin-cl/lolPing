@@ -1042,6 +1042,72 @@ static void test_capslock_trigger_swallows_key() {
   CHECK(r.swallow && r.injects.empty());
 }
 
+static void test_custom_wheel_keys_pass_every_press_repeat_and_release() {
+  for (const WheelKind wheel : kWheels) {
+    for (const uint32_t vk : {TAB, KEY_V, 0x77u}) {
+      Config c;
+      c.trigger = Trigger::None;
+      if (wheel == WheelKind::Ping) { c.trigger = Trigger::CustomVk; c.triggerVk = vk; }
+      if (wheel == WheelKind::Emote) { c.emoteTrigger = Trigger::CustomVk; c.emoteTriggerVk = vk; }
+      if (wheel == WheelKind::Ask) { c.askTrigger = Trigger::CustomVk; c.askTriggerVk = vk; }
+      Decision d;
+      d.setCustomKeysPassThrough(true);
+      d.setConfig(c);
+      for (int i = 0; i < 5; ++i) {
+        const Result r = d.onEvent(kd(vk));
+        CHECK(!r.swallow && r.injects.empty() && r.emits.empty());
+      }
+      Result r = d.onEvent(ku(vk));
+      CHECK(!r.swallow && r.injects.empty() && r.emits.empty());
+
+      d.onEvent(kd(vk));
+      CHECK(d.onEvent(md(Btn::Left, 0, 0)).swallow);
+      CHECK(emitIs(findEmit(d.onEvent(mv(40, 0)), Emit::Kind::WheelOpen), wheel));
+      r = d.onEvent(kd(vk));
+      CHECK(!r.swallow && r.injects.empty());
+      CHECK(emitIs(findEmit(d.onEvent(mu(Btn::Left, 40, 0)), Emit::Kind::WheelRelease), wheel));
+      r = d.onEvent(ku(vk));
+      CHECK(!r.swallow && r.injects.empty() && emitIs(findEmit(r, Emit::Kind::TriggerUp), wheel));
+    }
+  }
+}
+
+static void test_custom_wheel_shortcuts_pass_in_both_key_orders_without_claiming_clicks() {
+  for (const uint32_t modifier : {CTRL, ALT, 0xA0u, WIN}) {
+    for (const bool modifierFirst : {true, false}) {
+      Decision d = withTrigger(Trigger::CustomVk, KEY_V, true);
+      d.setCustomKeysPassThrough(true);
+      for (const uint32_t vk : {modifierFirst ? modifier : KEY_V, modifierFirst ? KEY_V : modifier, KEY_V}) {
+        const Result r = d.onEvent(kd(vk));
+        CHECK(!r.swallow && r.injects.empty() && r.emits.empty());
+      }
+      CHECK(!d.onEvent(md(Btn::Left, 0, 0)).swallow);
+      CHECK(d.onEvent(mv(40, 0)).emits.empty());
+      CHECK(!d.onEvent(mu(Btn::Left, 40, 0)).swallow);
+      for (const uint32_t vk : {KEY_V, modifier}) {
+        const Result r = d.onEvent(ku(vk));
+        CHECK(!r.swallow && r.injects.empty() && r.emits.empty());
+      }
+      d.onEvent(kd(KEY_V));
+      CHECK(d.onEvent(md(Btn::Left, 0, 0)).swallow);
+      CHECK(emitIs(findEmit(d.onEvent(mv(40, 0)), Emit::Kind::WheelOpen), WheelKind::Ping));
+    }
+  }
+}
+
+static void test_custom_wheel_typing_keeps_real_events_and_mouse_clicks() {
+  Decision d = withTrigger(Trigger::CustomVk, KEY_V, true);
+  d.setCustomKeysPassThrough(true);
+  for (const InputEvent e : {kd(KEY_V), kd(KEY_T), kd(KEY_V), ku(KEY_T)}) {
+    const Result r = d.onEvent(e);
+    CHECK(!r.swallow && r.injects.empty() && r.emits.empty());
+  }
+  CHECK(!d.onEvent(md(Btn::Left, 0, 0)).swallow);
+  CHECK(!d.onEvent(mu(Btn::Left, 0, 0)).swallow);
+  const Result r = d.onEvent(ku(KEY_V));
+  CHECK(!r.swallow && r.injects.empty());
+}
+
 static void test_custom_key_trigger() {
   Decision d = withTrigger(Trigger::CustomVk, KEY_V);
   CHECK(d.onEvent(kd(KEY_V)).swallow);
@@ -2155,6 +2221,9 @@ int main() {
   test_sync_keeps_swallowed_trigger_key();
   test_ctrl_trigger_ignores_alt();
   test_capslock_trigger_swallows_key();
+  test_custom_wheel_keys_pass_every_press_repeat_and_release();
+  test_custom_wheel_shortcuts_pass_in_both_key_orders_without_claiming_clicks();
+  test_custom_wheel_typing_keeps_real_events_and_mouse_clicks();
   test_custom_key_trigger();
   test_custom_key_tap_types_the_key();
   test_custom_key_rollover_keeps_typed_order();

@@ -370,6 +370,13 @@ void Decision::onKeyDown(const InputEvent& e, Result& r) {
   // Only in Idle: a foreign key arriving mid-gesture (Esc cancelling a wheel) says nothing about
   // the NEXT gesture.
   if (state_ == State::Idle && modBit(vk) == 0 && !isAnyTriggerVk(vk) && anyHeld()) foreignKey_ = true;
+  if (customKeysPassThrough_ && state_ == State::Idle) {
+    // A custom wheel key in a modifier chord belongs to that shortcut, in either press order.
+    for (const WheelKind k : kWheels) {
+      if (spec(k).trigger == Trigger::CustomVk && held(k) && (mods() & ~modBit(keyTriggerVk(k))) != 0)
+        foreignKey_ = true;
+    }
+  }
 
   if (!suspended_ && vk == cfg_.toggleVk && mods() == cfg_.toggleMods) {
     r.swallow = true;
@@ -417,8 +424,11 @@ void Decision::onKeyDown(const InputEvent& e, Result& r) {
       cancelGesture(r);
       return;
     }
-    // Caps Lock and custom-key triggers of any wheel would toggle or type: keep them from the OS.
-    const auto ownKey = [&](WheelKind k) { return isKeyTrigger(k) && vk == keyTriggerVk(k); };
+    // Windows observes custom keys without delaying their native shortcuts or repeat events.
+    const auto ownKey = [&](WheelKind k) {
+      return isKeyTrigger(k) && vk == keyTriggerVk(k) &&
+          !(customKeysPassThrough_ && spec(k).trigger == Trigger::CustomVk);
+    };
     // Tap-through: the trigger key was flushed for typing, so its auto-repeats type too.
     if (vk == typedVk_) {
       swallowKeyUps_.erase(vk);

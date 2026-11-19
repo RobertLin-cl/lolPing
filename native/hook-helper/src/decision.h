@@ -109,6 +109,8 @@ class Decision {
   void setFullscreenProbe(std::function<bool(int x, int y)> probe);
   // Only the Windows hook enables passive summoner key observation.
   void setSummonerKeysSupported(bool on) { summonerKeysSupported_ = on; }
+  // Windows custom wheel keys keep their native press, repeat and release timing.
+  void setCustomKeysPassThrough(bool on) { customKeysPassThrough_ = on; }
   // Windows opens the menu bar / Start menu on a lone Alt / Win key-up, so a swallowed press while one is held
   // gets a mask key before that key-up. macOS has no such behaviour: its hook layer turns this off.
   void setMaskMenuKeys(bool on) { maskMenuKeys_ = on; }
@@ -177,6 +179,7 @@ class Decision {
   std::function<bool(int x, int y)> fullscreenProbe_;
   State state_ = State::Idle;
   bool summonerKeysSupported_ = false;
+  bool customKeysPassThrough_ = false;
   std::array<bool, 256> keyDown_{};
   std::set<uint32_t> swallowKeyUps_;
   bool swallowRightUp_ = false;

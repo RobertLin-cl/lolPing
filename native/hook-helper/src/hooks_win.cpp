@@ -256,6 +256,7 @@ void activateWindow(uint64_t handle) {
 int runHooks(Output& out) {
   Decision decision;
   decision.setSummonerKeysSupported(true);
+  decision.setCustomKeysPassThrough(true);
   g_decision = &decision;
   g_out = &out;
   decision.setFullscreenProbe(clickIsOnFullscreenApp);
