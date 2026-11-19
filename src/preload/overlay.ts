@@ -4,8 +4,10 @@ import {
   OVERLAY_ASSETS, OVERLAY_CHANNELS, OVERLAY_EMOTED, OVERLAY_IDLE, OVERLAY_PINGED, type OverlayChannel, type OverlayEvents,
 } from '../shared/ipc';
 import type { PingId } from '../shared/pings';
+import { platformOf } from '../shared/platform';
 
 const api = {
+  keepAudioOutputActive: platformOf(process.platform) === 'win',
   on<C extends OverlayChannel>(channel: C, cb: (payload: OverlayEvents[C]) => void): void {
     if (!OVERLAY_CHANNELS.includes(channel)) throw new Error(`unknown overlay channel: ${channel}`);
     ipcRenderer.on(channel, (_event, payload: OverlayEvents[C]) => cb(payload));

@@ -243,6 +243,7 @@ Several pings can be on screen at once, and each is independent.
 - **Decoding:** all ping and tick sounds are decoded once into `AudioBuffer`s at overlay load, with `AudioContext({latencyHint:'interactive'})`.
 - **Playback:** each play is a fresh `AudioBufferSource` → `GainNode` (volume from settings). This removed the noticeable delay heard with `HTMLAudioElement` in the prototype.
 - **Autoplay:** Electron's `autoplayPolicy: 'no-user-gesture-required'` keeps the context running without a user gesture.
+- **Windows idle output:** an active `AudioWorklet` with no inputs and one unconnected output prevents Chromium's silent-sink suspension in interactive mode. It never connects a signal to the speakers. This keeps the stream open between pings, avoiding repeated wake-ups that can interrupt music with some DAC drivers. It remains active while muted and adds idle audio processing. macOS, Linux and the browser demo do not enable it. If loading the worklet fails, normal ping playback still works and the renderer logs the failure.
 - **No double sounds:** only the overlay that renders a ping plays its sound.
 
 ## 8. Settings

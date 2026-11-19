@@ -35,6 +35,9 @@ emoteSvg.id = 'emoteWheel';
 pingSvg.after(emoteSvg);
 
 const sounds = new SoundBank();
+if (window.overlay.keepAudioOutputActive) {
+  void sounds.keepOutputActive().catch((error: unknown) => console.warn('Audio keep-alive unavailable:', error));
+}
 // Emotes share the pings' layer, so whichever was sent last is drawn on top.
 const stage = new EmoteStage(pingLayer);
 const texts = new TextStage(textLayer);

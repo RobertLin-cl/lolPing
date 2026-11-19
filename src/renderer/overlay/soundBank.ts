@@ -1,3 +1,5 @@
+import keepOutputActiveUrl from './keepOutputActive.worklet.js?url&no-inline';
+
 /** Safety ceiling: more overlapping sounds than this are skipped (the ping still shows). */
 export const MAX_VOICES = 8;
 
@@ -6,6 +8,17 @@ export class SoundBank {
   private readonly ctx = new AudioContext({ latencyHint: 'interactive' });
   private readonly buffers = new Map<string, AudioBuffer>();
   private voices = 0;
+  private outputKeeper: AudioWorkletNode | null = null;
+
+  /** Prevents Chromium's idle output suspension without connecting any signal to the speakers. */
+  async keepOutputActive(): Promise<void> {
+    if (this.outputKeeper) return;
+    await this.ctx.audioWorklet.addModule(keepOutputActiveUrl);
+    this.outputKeeper = new AudioWorkletNode(this.ctx, 'keep-output-active', {
+      numberOfInputs: 0,
+      numberOfOutputs: 1,
+    });
+  }
 
   /** Decodes every sound up front, each under its key. Resolves with the URLs that failed to load. */
   async load(entries: readonly { key: string; url: string }[]): Promise<string[]> {
