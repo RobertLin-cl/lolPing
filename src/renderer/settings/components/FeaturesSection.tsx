@@ -42,7 +42,7 @@ export function FeaturesSection({ settings: s, update }: { settings: Settings; u
   return (
     <>
       {firstRun ? <FirstRunDialog settings={s} update={update} onClose={() => setFirstRun(false)} /> : null}
-      {featureGroups(api.platform).map(({ id, parts }) => {
+      {featureGroups(api.platform).filter(({ id }) => !api.capabilities || api.capabilities.features.includes(id)).map(({ id, parts }) => {
         if (parts.length === 0) {
           return <SwitchRow key={id} icon={ICONS[id]} title={t.featureTitle[id]} description={t.featureDesc[id]}
             checked={s.features[id]} onChange={(v) => set(id, v)} />;

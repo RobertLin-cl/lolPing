@@ -4,6 +4,8 @@ dist/
 release/
 site-dist/
 native/hook-helper/build/
+native/desktop-pilot/target/
+native/desktop-pilot/gen/
 *.log
 .DS_Store
 tools/extract-assets/.cache/

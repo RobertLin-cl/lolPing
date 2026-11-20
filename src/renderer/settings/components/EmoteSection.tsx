@@ -162,8 +162,9 @@ export function EmoteSection({ settings: s, update, lengthUnit, grey }: {
   const pool: PoolItem<EmoteRef>[] = [
     ...EMOTE_CATALOG.map((e) => ({ id: e.slug, icon: emoteIconUrl(e.slug), name: emoteName(e.slug, t.lang, s.customEmotes) })),
     ...s.customEmotes.map((c) => ({
-      id: c.id, icon: customStillUrl(customHash(c.id)), name: c.name, tool: soundTool(c),
-      onRemove: () => {
+      id: c.id, icon: customStillUrl(customHash(c.id)), name: c.name,
+      tool: api.capabilities?.emoteFiles === false ? undefined : soundTool(c),
+      onRemove: api.capabilities?.emoteFiles === false ? undefined : () => {
         clearErrors();
         void api.removeEmote(c.id);
       },
@@ -215,7 +216,8 @@ export function EmoteSection({ settings: s, update, lengthUnit, grey }: {
       <SliderRow limit="customEmoteSizePx" icon={<ResizeLarge24Regular />} title={t.customEmoteSize} description={t.customEmoteSizeDesc}
         value={s.customEmoteSizePx} format={(v) => `${v} ${lengthUnit}`} onChange={(v) => void update({ customEmoteSizePx: v })} dim={grey.paused} />
       <WheelEditor wheel={s.emoteWheel} center={s.clickEmoteId} centerOn={s.emoteClick && !keyOff} trigger={key}
-        pool={pool} poolExtra={importer} onDropFiles={importFiles}
+        pool={pool} poolExtra={api.capabilities?.emoteFiles === false ? undefined : importer}
+        onDropFiles={api.capabilities?.emoteFiles === false ? undefined : importFiles}
         onFxPick={(id, fx) => void api.setEmoteFx(id, fx)}
         fxIds={s.customEmotes.map((c) => c.id)}
         fxFor={(id) => s.customEmotes.find((c) => c.id === id)?.fx}

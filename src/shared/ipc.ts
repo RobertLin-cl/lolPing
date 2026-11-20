@@ -1,6 +1,7 @@
 import { isChatCategory, type ChatCategory, type ChatFilter } from './chatFilter';
 import type { EmoteArt, EmoteFile, EmoteRef, ImportResult, SoundResult } from './emotes';
 import type { Lang } from './i18n';
+import type { FeatureId } from './features';
 import type { PingId } from './pings';
 import type { Platform } from './platform';
 import type { HelperStatus, WheelKind } from './protocol';
@@ -311,6 +312,8 @@ export { SETTINGS_CH } from './settingsChannels';
 
 /** window.settingsApi in the settings renderer. */
 export interface SettingsApi {
+  /** Absent in the shipping app, which supplies every desktop service. */
+  capabilities?: { features: readonly FeatureId[]; autoStart: boolean; emoteFiles: boolean };
   readonly platform: Platform;
   getSettings(): Promise<Settings>;
   setSettings(patch: Partial<Settings>): Promise<SetSettingsResult>;

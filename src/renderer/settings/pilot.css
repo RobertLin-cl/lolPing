@@ -1,0 +1,9 @@
+/* The shipping page is transparent over Electron's Mica; the Rust host needs its own surface. */
+:root {
+  color-scheme: light dark;
+  background-color: #f3f3f3;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root { background-color: #202020; }
+}

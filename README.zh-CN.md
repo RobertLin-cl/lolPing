@@ -240,6 +240,40 @@ npm run dev
 
 `assets/textures` 中的图标和 `assets/sounds` 中的音效提取自本地安装的英雄联盟。游戏更新后如何重新提取，请见 [`tools/extract-assets`](tools/extract-assets)。`assets/emotes` 中的表情动画、图标和音效同样归 Riot Games 所有，由 `tools/extract-assets --emotes` 从同一份安装中烘焙生成。
 
+## Windows Rust 桌面原型
+
+这是内存实验，尚不能替代完整应用。Tauri 和小型 Electron 对照程序运行同一套轮盘界面及 C++ 输入辅助程序。
+Rust 程序现已支持设置界面、拖动和点击信号、表情轮盘、预览，以及已有自定义图片和音效的播放。
+自定义文件导入和删除、房间、聊天、开机启动、更新和 AI 队友尚未连接。显示器配置变化后需要重启。
+此实验暂不支持 macOS 和 Linux。
+
+除上面的 Windows 编译工具外，还需要 Rust MSVC 工具链和 WebView2 Runtime：
+
+```powershell
+npm run build:helper
+npm run build:pilot
+cargo build --release --manifest-path native/desktop-pilot/Cargo.toml
+./tools/run-desktop-pilot.ps1 -Runtime tauri
+```
+
+测试真实手势前先退出正式版；启动脚本会拒绝同时运行第二套输入钩子。托盘菜单可以退出原型。
+`-Runtime electron` 启动使用相同界面的对照程序。`-Simulate` 使用没有全局钩子的辅助程序模拟模式，
+可以在正式版保持运行时测量；`-Seconds 40` 会自动退出。
+`-Demo -Seconds 60` 会显示轮盘三十秒后释放信号，不生成系统输入。
+`-Settings -Simulate` 可在没有全局钩子的情况下打开现有设置界面，之后也能从托盘菜单打开；关闭设置时会销毁该 WebView。
+`-Smoke -Seconds 40` 使用 `out/desktop-pilot` 下的独立测试目录检查设置保存、读回、还原、暂停和预览。
+
+Rust 程序首次启动时只读正式版设置，不修改它。之后的修改通过临时文件保存到
+`%APPDATA%/com.lolping.desktop-pilot/settings.json`，即时应用到所有浮层和输入辅助程序，无需重新编译。
+已有自定义表情从正式版的表情目录只读加载，路径只接受规定的哈希和文件类型，并限制文件大小。
+原型没有新增自动网络请求目标；关于页面只在点击时打开本分支的 GitHub 页面。开发时需要下载 Rust 依赖，
+系统安装的 WebView2 Runtime 由应用之外的机制维护。
+
+`./tools/measure-desktop-pilot.ps1` 依次用模拟模式运行两个程序，等待界面就绪、预热八秒后，每秒采样一次，
+共十次。测量包含辅助程序和浏览器子程序的整个进程树，结果保存在 `out/desktop-pilot/memory-samples.json`。
+私有工作集表示驻留的私有内存，私有字节表示已提交的私有内存；工作集总和可能重复计算共享页面。
+结果仅比较相同的有限工作负载，不代表完整功能、GPU 占用、手势延迟或耗电表现。
+
 ## 许可证
 
 代码采用 [MIT 许可证](LICENSE)。信号和表情的图标、动画与音效版权归 Riot Games 所有，不在该许可证范围内。如果你代表 Riot Games 并希望移除相关内容，请提交 issue。

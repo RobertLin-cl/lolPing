@@ -204,6 +204,44 @@ npm run dev
 | `node tools/room-peer/run.mjs <code>` | Joins a room as a fake member that pings at random, to try rooms with one computer; `--relay` joins through the relays and `--emotes` also sends emotes (see [`tools/room-peer`](tools/room-peer)) |
 | `node tools/relay-probe/run.mjs` | Tests which public Nostr relays can carry rooms; it chose the list in `src/main/relays.ts` (see [`tools/relay-probe`](tools/relay-probe)) |
 
+### Windows Rust desktop pilot
+
+This is a memory experiment, not a replacement for the full app. It runs the existing wheel renderer and C++ input helper
+inside either Tauri or a small Electron host. The Rust host now supports settings, drag/click pings, the emote wheel,
+previews, and playback of existing custom images and sounds. Custom file import/removal, rooms, chat, startup launch,
+updates and the teammate are not connected. Display changes require restarting the pilot. macOS and Linux are not part
+of this experiment.
+
+Install the Rust MSVC toolchain and WebView2 Runtime as well as the Windows build tools above, then run:
+
+```powershell
+npm run build:helper
+npm run build:pilot
+cargo build --release --manifest-path native/desktop-pilot/Cargo.toml
+./tools/run-desktop-pilot.ps1 -Runtime tauri
+```
+
+Quit the normal app before testing real gestures. The runner refuses to start a second input helper. The tray menu quits
+the pilot. `-Runtime electron` runs the same renderer in the control host. `-Simulate` starts the helper without global
+hooks, so either pilot can be measured while the normal app stays open. `-Seconds 40` exits automatically.
+`-Demo -Seconds 60` shows a wheel for thirty seconds and releases a ping without OS input.
+`-Settings -Simulate` opens the existing settings interface without global hooks. The tray's Settings item opens it
+later. Closing settings destroys that WebView. `-Smoke -Seconds 40` checks a settings save/read/restore, runtime pause,
+and previews using a separate test folder under `out/desktop-pilot`.
+
+At first launch the Rust host reads the normal app's settings without changing them. Subsequent edits are saved through
+a temporary file into `%APPDATA%/com.lolping.desktop-pilot/settings.json`; the normal app keeps its own settings. Changes
+reach every overlay and the helper immediately, without rebuilding. Existing custom images are served read-only from
+the normal app's emote folder with bounded, hash-only paths. The pilot adds no automatic app network hosts; the About
+page opens this fork's GitHub page only on request. Development downloads Rust crates, and the installed WebView2 Runtime
+is managed separately from the app.
+
+`./tools/measure-desktop-pilot.ps1` runs both hosts in simulation mode, waits for renderer readiness, warms assets for
+eight seconds and takes ten one-second samples of each process tree, including the helper and browser subprocesses.
+Results go to `out/desktop-pilot/memory-samples.json`. Private working set measures resident private memory; private bytes
+measure committed private memory. Total working set can count shared pages more than once. These results compare the
+same limited workload, not full-app feature parity, GPU use, gesture latency or power consumption.
+
 ### Releasing
 
 Bump `version` in `package.json`, commit, then push a matching tag such as `v0.2.0`. The Release workflow creates the GitHub release as a draft. The Windows job attaches the installer, `latest.yml` and the installer's `.blockmap`, and the Mac job attaches the disk image. electron-updater needs both `latest.yml` and the `.blockmap` to update installed copies. A last job publishes the release once everything is attached.

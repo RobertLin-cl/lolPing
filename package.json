@@ -11,6 +11,9 @@
   "bugs": "https://github.com/darrenprx/lolPing/issues",
   "main": "out/main/index.js",
   "scripts": {
+    "build:pilot": "node tools/desktop-pilot.mjs",
+    "pilot:electron": "pwsh -NoProfile -File tools/run-desktop-pilot.ps1 -Runtime electron",
+    "pilot:tauri": "pwsh -NoProfile -File tools/run-desktop-pilot.ps1 -Runtime tauri",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "start": "electron-vite preview",

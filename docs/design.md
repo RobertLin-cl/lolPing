@@ -1,5 +1,49 @@
 # lolPing — Design Spec
 
+## Experimental Rust desktop host
+
+`native/desktop-pilot` is a Windows-only Tauri experiment, separate from the shipping Electron app. It embeds a Vite
+build of the existing overlay renderer. `tools/desktop-pilot-electron.cjs` provides the same limited workload in Electron
+for comparison. Both hosts create one transparent, non-focusable, click-through window per display, park idle overlays
+off-screen, and supervise the same C++ helper through JSON lines. Hooks start only after every renderer subscribes.
+Closing the Rust host closes helper stdin, waits briefly for normal cleanup, and kills the child only if it stays alive.
+
+The Rust host imports the original settings on first launch and keeps later edits in its own application data folder.
+Every view uses the existing TypeScript normalizer, settings merge and key-clash logic. Rust validates the flat helper
+configuration before sending it, rejects unavailable room/agent shortcuts, serializes settings writes through a revision
+check and replaces a temporary settings file before broadcasting a change. Runtime pause survives settings edits.
+The React settings window opens on demand from the tray and is destroyed on close; closing it also releases key capture.
+All WebViews use the same browser arguments because WebView2 shares a browser environment between them.
+The pilot paints a light or dark settings surface following the system theme. The shared settings CSS stays transparent
+for Electron's Mica; without the pilot surface, a dark Fluent theme could sit on WebView2's default white background.
+
+Drag/click pings, emote gestures, previews and existing custom image/sound playback are connected. Custom file management,
+rooms, startup launch and updates remain unavailable, and the settings page hides those controls through optional runtime
+capabilities. The shipping Electron preload supplies no capability restriction, so its controls retain their behaviour.
+Existing emotes are read-only through a separate custom scheme: filenames must be hashes with a known suffix, symlinks
+are refused, and file sizes are capped. Vite substitutes only the pilot's custom asset URL functions for WebView2's
+localhost scheme mapping. The pilot adds no automatic network hosts. Display changes still need a restart, and the pilot
+must not replace the shipping app before the remaining compatibility paths are migrated and tested.
+
+The comparison script uses the helper's simulation mode to avoid installing hooks alongside a running app. It includes
+all descendants in private-working-set and private-byte samples. It does not measure GPU allocation, power or latency.
+Use a release Rust build and identical settings, monitor layout and renderer assets for both hosts. The frontend's
+optional `LOLPING_PILOT_DEMO=1` mode exercises wheel and ping rendering without generating OS input; leave it unset for
+idle memory samples. The benchmark forces the same build snapshot into both runtimes. The settings smoke mode uses an
+isolated workspace directory and checks save/read/restore, runtime pause and preview delivery. Neither test substitutes
+for real input and sound checks.
+
+On 2026-11-20, one local Windows run with two displays, Electron 44.10.2 and Tauri 2.12.7 averaged 649.97 MiB private
+working set for the Electron control (8 processes) and 547.46 MiB for Tauri (12 processes), a reduction of 102.51 MiB
+(15.8%). Average private bytes were 737.79 MiB and 637.07 MiB respectively. Each host had ten idle samples after the same
+eight-second warm-up. This is a pilot result, not a promise for the complete app or other machines. Raw samples are
+generated at `out/desktop-pilot/memory-samples.json` and are not committed.
+
+After settings and emotes were connected, the same ten-sample idle comparison averaged 654.10 MiB for Electron and
+533.62 MiB for Tauri, about 120.48 MiB (18.4%) less private working set. Average private bytes were 667.50 MiB and
+622.63 MiB. Electron's resident samples ranged from 502.04 to 671.13 MiB, so this run is evidence of a reduction on this
+machine, not a fixed saving. The settings window was closed; room and chat services are still absent from both hosts.
+
 **Date:** 2026-10-01
 **Status:** Implemented in v0.1.0; wheel customization (Bait, Vision Cleared, drag-and-drop slots) added in v0.2.1; rooms over LAN added in v0.3.0 (§12); emotes added in v0.5.0 (§13); foreign-chord pass-through and the fullscreen pause added in v0.5.1; custom emote stills travelling between room members, emote effects, signed room messages, room text, votes and the room panel (§14), feature switches (§15) and experimental Linux X11 support added in v0.5.2; League's normal ping colours instead of the colourblind set, overlays that follow a game's display mode change, and Windows 10 before 1703 in v0.5.3; the AI teammate (§16) in v0.6.0
 

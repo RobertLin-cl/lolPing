@@ -44,7 +44,8 @@ const SECTIONS: { id: string; label: (t: Strings) => string; icon: ReactNode; fe
   { id: 'wheel', label: (t) => t.navWheel, icon: <DataPie24Regular /> },
   { id: 'pings', label: (t) => t.navPings, icon: <Location24Regular /> },
   { id: 'emotes', label: (t) => t.navEmotes, icon: <Emoji24Regular />, feature: 'emotes' },
-  ...(PLATFORM === 'win' ? [{ id: 'summoners', label: (t: Strings) => t.featureTitle.roomSpells, icon: <Games24Regular /> }] : []),
+  ...(PLATFORM === 'win' && (!api.capabilities || api.capabilities.features.includes('roomSpells'))
+    ? [{ id: 'summoners', label: (t: Strings) => t.featureTitle.roomSpells, icon: <Games24Regular /> }] : []),
   { id: 'room', label: (t) => t.navRoom, icon: <PeopleCommunity24Regular />, feature: 'rooms' },
   { id: 'teammate', label: (t) => t.navTeammate, icon: <Sparkle24Regular />, feature: 'teammate' },
   { id: 'app', label: (t) => t.navApp, icon: <Settings24Regular /> },
@@ -219,9 +220,11 @@ function SettingsPage({ settings: s, status, update }: { settings: Settings; sta
         ) : null}
         <SwitchRow icon={<MusicNote224Regular />} title={t.tickSound} description={t.tickSoundDesc}
           checked={s.tickSound} onChange={(v) => void update({ tickSound: v })} dim={grey.sound} />
-        <SwitchRow icon={<Speaker224Regular />} title={t.chatSound} description={t.chatSoundDesc}
-          checked={s.chatSound} onChange={(v) => void update({ chatSound: v })}
-          dim={grey.sound || !featureOn(s, 'roomText')} />
+        {!api.capabilities || api.capabilities.features.includes('roomText') ? (
+          <SwitchRow icon={<Speaker224Regular />} title={t.chatSound} description={t.chatSoundDesc}
+            checked={s.chatSound} onChange={(v) => void update({ chatSound: v })}
+            dim={grey.sound || !featureOn(s, 'roomText')} />
+        ) : null}
 
         <div className="section" id="wheel">{t.navWheel}</div>
         <SliderRow limit="wheelSizePx" icon={<ResizeLarge24Regular />} title={t.wheelSize} description={t.wheelSizeDesc}
@@ -269,7 +272,7 @@ function SettingsPage({ settings: s, status, update }: { settings: Settings; sta
           </>
         ) : null}
 
-        {PLATFORM === 'win' ? (
+        {PLATFORM === 'win' && (!api.capabilities || api.capabilities.features.includes('roomSpells')) ? (
           <>
             <div className="section" id="summoners">{t.featureTitle.roomSpells}</div>
             <SummonerSpellsSection settings={s} update={update} grey={grey} />
@@ -291,8 +294,10 @@ function SettingsPage({ settings: s, status, update }: { settings: Settings; sta
         ) : null}
 
         <div className="section" id="app">{t.navApp}</div>
-        <SwitchRow icon={<Rocket24Regular />} title={t.launchAtStartup} description={t.launchAtStartupDesc}
-          checked={s.launchAtStartup} onChange={(v) => void update({ launchAtStartup: v })} />
+        {api.capabilities?.autoStart !== false ? (
+          <SwitchRow icon={<Rocket24Regular />} title={t.launchAtStartup} description={t.launchAtStartupDesc}
+            checked={s.launchAtStartup} onChange={(v) => void update({ launchAtStartup: v })} />
+        ) : null}
         <SwitchRow icon={<Power24Regular />} title={t.startEnabled} description={t.startEnabledDesc}
           checked={s.enabledOnStart} onChange={(v) => void update({ enabledOnStart: v })} />
         <SettingRow icon={<LocalLanguage24Regular />} title={t.language} description={t.languageDesc}>

@@ -49,3 +49,13 @@ export const SETTINGS_CH = {
   teammateRecentApps: 'teammate:recentApps',
   teammateEditors: 'teammate:editors',
 } as const;
+
+/** Native commands and events for the Rust desktop migration. */
+export const PILOT_CH = {
+  bootstrap: 'pilot_bootstrap', snapshot: 'pilot_snapshot', ready: 'pilot_ready', save: 'pilot_save',
+  enabled: 'pilot_enabled', capture: 'pilot_capture', retry: 'pilot_retry', placed: 'pilot_placed',
+  preview: 'pilot_preview', idle: 'pilot_idle', openFolder: 'pilot_open_folder', openProject: 'pilot_open_project',
+  stop: 'pilot_stop', smokeResult: 'pilot_smoke_result',
+  settingsChanged: 'pilot-settings', statusChanged: 'pilot-status', input: 'pilot-input',
+  placementChanged: 'pilot-placed', previewed: 'pilot-preview',
+} as const;
