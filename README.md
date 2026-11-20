@@ -207,8 +207,8 @@ npm run dev
 ### Windows Rust desktop pilot
 
 This is a memory experiment, not a replacement for the full app. It runs the existing wheel renderer and C++ input helper
-inside either Tauri or a small Electron host. The Rust host now supports settings, drag/click pings, the emote wheel,
-previews, and playback of existing custom images and sounds. Custom file import/removal, rooms, chat, startup launch,
+inside either Tauri or a small Electron host. The Rust host supports settings, drag/click pings, the emote wheel,
+previews, and importing/removing custom images, animations and sounds. Rooms, chat, startup launch,
 updates and the teammate are not connected. Display changes require restarting the pilot. macOS and Linux are not part
 of this experiment.
 
@@ -227,17 +227,23 @@ hooks, so either pilot can be measured while the normal app stays open. `-Second
 `-Demo -Seconds 60` shows a wheel for thirty seconds and releases a ping without OS input.
 `-Settings -Simulate` opens the existing settings interface without global hooks. The tray's Settings item opens it
 later. Closing settings destroys that WebView. `-Smoke -Seconds 40` checks a settings save/read/restore, runtime pause,
-and previews using a separate test folder under `out/desktop-pilot`.
+and previews using a separate test folder under `out/desktop-pilot`. It also encodes a real PNG into a linked still/HD
+pair, imports it, attaches and removes a sound, changes its effect, and checks wheel repair and file removal.
 
 At first launch the Rust host reads the normal app's settings without changing them. Subsequent edits are saved through
 a temporary file into `%APPDATA%/com.lolping.desktop-pilot/settings.json`; the normal app keeps its own settings. Changes
 reach every overlay and the helper immediately, without rebuilding. Existing custom images are served read-only from
-the normal app's emote folder with bounded, hash-only paths. The pilot adds no automatic app network hosts; the About
+the normal app's emote folder. New files and sound overrides stay in the Rust data folder; removing an inherited emote
+only removes it from the Rust list. Local sound overrides also hide the original sound when cleared. Uploads use raw
+binary packets, and Rust checks sizes, image dimensions, HD links and content hashes again before writing. File writes
+are rolled back if another file or the settings save fails. Reads accept bounded, hash-only paths for current entries.
+The pilot adds no automatic app network hosts; the About
 page opens this fork's GitHub page only on request. Development downloads Rust crates, and the installed WebView2 Runtime
 is managed separately from the app.
 
 `./tools/measure-desktop-pilot.ps1` runs both hosts in simulation mode, waits for renderer readiness, warms assets for
-eight seconds and takes ten one-second samples of each process tree, including the helper and browser subprocesses.
+eight seconds and takes ten valid samples of each process tree, including the helper and browser subprocesses.
+Valid samples are spaced one second apart; unavailable or incomplete counters are retried.
 Results go to `out/desktop-pilot/memory-samples.json`. Private working set measures resident private memory; private bytes
 measure committed private memory. Total working set can count shared pages more than once. These results compare the
 same limited workload, not full-app feature parity, GPU use, gesture latency or power consumption.

@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 Set-Location (Split-Path $PSScriptRoot -Parent)
 $outputDir = Join-Path (Get-Location) 'out/desktop-pilot'
 $env:LOLPING_PILOT_SIMULATE = '1'
-$env:LOLPING_PILOT_SECONDS = '40'
+$env:LOLPING_PILOT_SECONDS = '120'
 $env:ELECTRON_RUN_AS_NODE = $null
 Remove-Item Env:LOLPING_PILOT_DEMO -ErrorAction SilentlyContinue
 Remove-Item Env:LOLPING_PILOT_SETTINGS -ErrorAction SilentlyContinue
@@ -37,12 +37,16 @@ foreach ($runtime in @('electron', 'tauri')) {
     # Both runtimes get the same asset warm-up interval before collecting idle samples.
     Start-Sleep -Seconds 8
     $samplesForRuntime = @()
-    for ($sample = 0; $sample -lt $Samples; $sample++) {
+    $sampleDeadline = [DateTime]::UtcNow.AddSeconds(90)
+    for ($sample = 0; $sample -lt $Samples;) {
+      $process.Refresh()
+      if ($process.HasExited -or [DateTime]::UtcNow -gt $sampleDeadline) { throw "$runtime could not collect complete memory samples" }
       $snapshot = Get-Counter -Counter '\Process(*)\ID Process','\Process(*)\Creating Process ID',
         '\Process(*)\Working Set - Private','\Process(*)\Private Bytes','\Process(*)\Working Set' -ErrorAction SilentlyContinue
       $instances = @{}
       foreach ($counter in $snapshot.CounterSamples) {
-        if ($counter.Status -ne 0) { continue }
+        # PDH reports both valid data (0) and newly collected data (1) as usable samples.
+        if ($counter.Status -notin @(0, 1)) { continue }
         if ($counter.Path -match '\\process\((.+)\)\\(.+)$') {
           $instance = $Matches[1]
           $name = $Matches[2]
@@ -60,22 +64,37 @@ foreach ($runtime in @('electron', 'tauri')) {
         }
       } while ($added)
       $counters = @($processes | Where-Object { $ids.Contains([uint32]$_['id process']) })
-      if ($counters.Length -lt 3) { throw "$runtime has an incomplete process tree" }
+      if ($counters.Length -lt 3) {
+        Write-Output "$runtime process counters were incomplete; retrying"
+        continue
+      }
+      $required = @('id process', 'creating process id', 'working set - private', 'private bytes', 'working set')
+      $incomplete = @($counters | Where-Object {
+        $row = $_
+        @($required | Where-Object { -not $row.ContainsKey($_) }).Count -gt 0
+      })
+      $privateWorkingSet = ($counters | ForEach-Object { $_['working set - private'] } | Measure-Object -Sum).Sum
+      if ($incomplete.Length -gt 0 -or -not [double]::IsFinite($privateWorkingSet) -or $privateWorkingSet -le 0) {
+        Write-Output "$runtime memory sample was unavailable; retrying"
+        continue
+      }
       $samplesForRuntime += [PSCustomObject]@{
         Runtime = $runtime
         Sample = $sample
         Processes = $counters.Length
-        PrivateWorkingSetMiB = [Math]::Round(($counters | ForEach-Object { $_['working set - private'] } | Measure-Object -Sum).Sum / 1MB, 2)
+        PrivateWorkingSetMiB = [Math]::Round($privateWorkingSet / 1MB, 2)
         PrivateBytesMiB = [Math]::Round(($counters | ForEach-Object { $_['private bytes'] } | Measure-Object -Sum).Sum / 1MB, 2)
         WorkingSetMiB = [Math]::Round(($counters | ForEach-Object { $_['working set'] } | Measure-Object -Sum).Sum / 1MB, 2)
       }
+      $sample++
       Start-Sleep -Seconds 1
     }
     $results += $samplesForRuntime
     $samplesForRuntime | Measure-Object PrivateWorkingSetMiB -Average -Minimum -Maximum | Format-List
   } finally {
-    # Each test instance exits on its own; never terminate an existing lolPing process.
-    if (-not $process.HasExited) { $process.WaitForExit(45000) | Out-Null }
+    # These are isolated simulation hosts with no settings writes; stop only the process this script started.
+    $process.Refresh()
+    if (-not $process.HasExited) { $process.Kill(); $process.WaitForExit(5000) | Out-Null }
   }
 }
 $results | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'memory-samples.json') -Encoding utf8

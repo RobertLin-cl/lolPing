@@ -19,6 +19,20 @@ pub fn find_asset(dir: &Path, path: &str) -> Option<PathBuf> {
     })
 }
 
+pub fn asset_id(path: &str) -> Option<String> {
+    let names = asset_names(path);
+    Some(format!("c:{}", names.first()?.split('.').next()?))
+}
+
+pub fn find_library_asset(local: &Path, inherited: &Path, path: &str) -> Option<PathBuf> {
+    let id = asset_id(path)?;
+    let hash = &id[2..];
+    let owns_image = find_asset(local, &format!("/emotes/{hash}.webp")).is_some();
+    let owns_sound = path.ends_with(".sound") && std::fs::symlink_metadata(local.join(format!("{hash}.sound.override")))
+        .is_ok_and(|m| m.is_file() && !m.is_symlink());
+    if owns_image || owns_sound { find_asset(local, path) } else { find_asset(inherited, path) }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,9 +1,12 @@
 mod assets;
 mod settings;
+mod emote_format;
+mod emote_library;
 
 use serde::Serialize;
 use serde_json::Value;
-use settings::{HelperConfig, SettingsState};
+use settings::{HelperConfig, SettingsState, SettingsUpdate};
+use emote_library::EmoteLibrary;
 use std::{collections::HashSet, io::{BufRead, BufReader, Write}, path::PathBuf,
     process::{Child, Command, Stdio}, sync::Mutex};
 use tauri::{Emitter, Manager, PhysicalPosition, PhysicalSize};
@@ -19,6 +22,7 @@ struct Pilot {
     ready: Mutex<HashSet<String>>,
     helper: Mutex<Option<Child>>,
     store: Mutex<SettingsState>,
+    library: EmoteLibrary,
 }
 
 impl Pilot {
@@ -182,6 +186,52 @@ fn pilot_save(window: tauri::WebviewWindow, app: tauri::AppHandle, pilot: tauri:
 }
 
 #[tauri::command]
+async fn pilot_import_emote(window: tauri::WebviewWindow, app: tauri::AppHandle, pilot: tauri::State<'_, Pilot>, request: tauri::ipc::Request<'_>) -> Result<Value, String> {
+    settings_window(&window)?;
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else { return Ok(serde_json::json!({ "ok": false, "error": "type" })); };
+    let upload = match emote_format::image_upload(bytes) {
+        Ok(upload) => upload,
+        Err(error) => return Ok(serde_json::json!({ "ok": false, "error": error })),
+    };
+    let result = {
+        let mut store = pilot.store.lock().map_err(|e| e.to_string())?;
+        pilot.library.import(&mut store, upload)
+    };
+    match result {
+        Ok(id) => { pilot.emit_snapshot(&app, "pilot-settings")?; Ok(serde_json::json!({ "ok": true, "id": id })) },
+        Err(error) => Ok(serde_json::json!({ "ok": false, "error": error })),
+    }
+}
+
+#[tauri::command]
+async fn pilot_emote_sound(window: tauri::WebviewWindow, app: tauri::AppHandle, pilot: tauri::State<'_, Pilot>, request: tauri::ipc::Request<'_>) -> Result<Value, String> {
+    settings_window(&window)?;
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else { return Ok(serde_json::json!({ "ok": false, "error": "type" })); };
+    let (header, sound) = match emote_format::sound_upload(bytes) {
+        Ok(upload) => upload,
+        Err(error) => return Ok(serde_json::json!({ "ok": false, "error": error })),
+    };
+    let result = {
+        let mut store = pilot.store.lock().map_err(|e| e.to_string())?;
+        pilot.library.sound(&mut store, header, sound)
+    };
+    match result {
+        Ok(()) => { pilot.emit_snapshot(&app, "pilot-settings")?; Ok(serde_json::json!({ "ok": true })) },
+        Err(error) => Ok(serde_json::json!({ "ok": false, "error": error })),
+    }
+}
+
+#[tauri::command]
+async fn pilot_remove_emote(window: tauri::WebviewWindow, app: tauri::AppHandle, pilot: tauri::State<'_, Pilot>, id: String, live: SettingsUpdate) -> Result<(), String> {
+    settings_window(&window)?;
+    {
+        let mut store = pilot.store.lock().map_err(|e| e.to_string())?;
+        pilot.library.remove(&mut store, &id, live).map_err(str::to_owned)?;
+    }
+    pilot.emit_snapshot(&app, "pilot-settings")
+}
+
+#[tauri::command]
 fn pilot_enabled(window: tauri::WebviewWindow, app: tauri::AppHandle, pilot: tauri::State<Pilot>, enabled: bool) -> Result<(), String> {
     settings_window(&window)?;
     pilot.store.lock().map_err(|e| e.to_string())?.enabled = enabled;
@@ -265,6 +315,7 @@ fn show_settings(app: &tauri::AppHandle) -> Result<(), String> {
     let window = tauri::WebviewWindowBuilder::new(app, "settings", tauri::WebviewUrl::App("settings/index.html".into()))
         .title("lolPing").inner_size(980.0, 680.0).min_inner_size(720.0, 520.0)
         .additional_browser_args("--autoplay-policy=no-user-gesture-required")
+        .disable_drag_drop_handler()
         .on_navigation(|url| url.host_str() == Some("tauri.localhost") || url.scheme() == "tauri")
         .build().map_err(|e| e.to_string())?;
     let handle = app.clone();
@@ -280,9 +331,12 @@ fn show_settings(app: &tauri::AppHandle) -> Result<(), String> {
 fn main() {
     if !cfg!(windows) { eprintln!("The desktop pilot currently targets Windows only"); std::process::exit(1); }
     let app = tauri::Builder::default()
-        .register_uri_scheme_protocol("lolping", |_context, request| {
-            let dir = PathBuf::from(std::env::var_os("APPDATA").unwrap_or_default()).join("lolPing/emotes");
-            let file = assets::find_asset(&dir, request.uri().path());
+        .register_uri_scheme_protocol("lolping", |context, request| {
+            let pilot = context.app_handle().state::<Pilot>();
+            let store = pilot.store.lock().ok();
+            let allowed = assets::asset_id(request.uri().path()).is_some_and(|id|
+                store.as_ref().is_some_and(|store| emote_library::has_emote(&store.settings, &id)));
+            let file = if allowed { assets::find_library_asset(&pilot.library.root, &pilot.library.inherited, request.uri().path()) } else { None };
             let mut response = tauri::http::Response::new(Vec::new());
             *response.status_mut() = tauri::http::StatusCode::NOT_FOUND;
             if let Some(file) = file {
@@ -301,7 +355,8 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![pilot_bootstrap, pilot_snapshot, pilot_ready, pilot_save,
             pilot_enabled, pilot_capture, pilot_retry, pilot_placed, pilot_preview, pilot_idle,
-            pilot_open_folder, pilot_open_project, pilot_stop, pilot_smoke_result])
+            pilot_open_folder, pilot_open_project, pilot_stop, pilot_smoke_result,
+            pilot_import_emote, pilot_emote_sound, pilot_remove_emote])
         .setup(|app| {
             let bootstrap: Value = serde_json::from_str(include_str!("../../../out/desktop-pilot/bootstrap.json"))?;
             let data_dir = std::env::var_os("LOLPING_PILOT_DATA_DIR").map(PathBuf::from).unwrap_or(app.path().app_data_dir()?);
@@ -321,7 +376,9 @@ fn main() {
                 Display { id, scale, dip: Rect { x: phys.x / scale, y: phys.y / scale, width: phys.width / scale, height: phys.height / scale }, phys }
             }).collect();
             if displays.is_empty() { return Err("No displays found".into()); }
-            app.manage(Pilot { displays: displays.clone(), ready: Mutex::new(HashSet::new()), helper: Mutex::new(None),
+            let library = EmoteLibrary { root: data_dir.join("emotes"),
+                inherited: PathBuf::from(std::env::var_os("APPDATA").unwrap_or_default()).join("lolPing/emotes") };
+            app.manage(Pilot { library, displays: displays.clone(), ready: Mutex::new(HashSet::new()), helper: Mutex::new(None),
                 store: Mutex::new(SettingsState::new(settings, file)) });
             let quit = tauri::menu::MenuItem::with_id(app, "quit", bootstrap["quit"].as_str().ok_or("Missing quit label")?, true, None::<&str>)?;
             let settings_item = tauri::menu::MenuItem::with_id(app, "settings", bootstrap["settingsLabel"].as_str().ok_or("Missing settings label")?, true, None::<&str>)?;

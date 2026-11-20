@@ -6,6 +6,14 @@ use std::path::{Path, PathBuf};
 #[serde(transparent)]
 pub struct HelperConfig(pub Value);
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SettingsUpdate {
+    pub settings: Value,
+    pub config: HelperConfig,
+    pub revision: u64,
+}
+
 impl<'de> Deserialize<'de> for HelperConfig {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let value = Value::deserialize(deserializer)?;
@@ -59,8 +67,7 @@ impl SettingsState {
     }
 
     pub fn save(&mut self, settings: Value, mut config: HelperConfig, revision: u64) -> Result<(), String> {
-        if revision != self.revision { return Err("Settings changed; reload before saving".into()); }
-        validate_settings(&settings)?;
+        self.check_update(&settings, revision)?;
         let bytes = serde_json::to_vec_pretty(&settings).map_err(|e| e.to_string())?;
         write_settings(&self.file, &bytes).map_err(|e| e.to_string())?;
         config.0["enabled"] = Value::Bool(self.enabled);
@@ -68,6 +75,11 @@ impl SettingsState {
         self.config = Some(config);
         self.revision += 1;
         Ok(())
+    }
+
+    pub fn check_update(&self, settings: &Value, revision: u64) -> Result<(), String> {
+        if revision != self.revision { return Err("Settings changed; reload before saving".into()); }
+        validate_settings(settings)
     }
 }
 

@@ -14,7 +14,7 @@ export interface PilotBootstrap extends PilotSnapshot {
 }
 
 export interface PilotHost {
-  invoke<T>(command: string, args?: Record<string, unknown>): Promise<T>;
+  invoke<T>(command: string, args?: Record<string, unknown> | Uint8Array): Promise<T>;
   listen(event: string, cb: (event: { payload: string }) => void): Promise<() => void>;
 }
 

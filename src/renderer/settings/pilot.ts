@@ -1,10 +1,12 @@
 import { PILOT_CH } from '../../shared/settingsChannels';
 import { desktopPilotRuntime, desktopPilotSettings, updateDesktopPilotSettings } from '../../shared/desktopPilot';
 import type { AppStatus, SettingsApi, SetSettingsResult } from '../../shared/ipc';
+import type { ImportResult, SoundResult } from '../../shared/emotes';
+import { emoteUpload, imageUpload } from '../../shared/emoteUpload';
 import { resolveLang, strings } from '../../shared/i18n';
 import type { Settings } from '../../shared/settings';
 import { pilotHost, type PilotSnapshot } from '../shared/pilotHost';
-import { customHash, customStillUrl, isEmoteFx } from '../../shared/emotes';
+import { isEmoteFx } from '../../shared/emotes';
 import './pilot.css';
 
 const host = pilotHost();
@@ -18,8 +20,13 @@ const subscribe = <T>(event: string, pick: (snapshot: PilotSnapshot) => T, cb: (
 };
 
 let writing: Promise<unknown> = Promise.resolve();
+const oneAtATime = <T>(run: () => Promise<T>): Promise<T> => {
+  const next = writing.then(run);
+  writing = next.catch(() => undefined);
+  return next;
+};
 const save = (edit: (settings: Settings) => SetSettingsResult): Promise<SetSettingsResult> => {
-  const next = writing.then(async () => {
+  return oneAtATime(async () => {
     const snapshot = await host.invoke<PilotSnapshot>(PILOT_CH.snapshot);
     const current = desktopPilotSettings(snapshot.settings);
     const result = edit(current);
@@ -34,15 +41,20 @@ const save = (edit: (settings: Settings) => SetSettingsResult): Promise<SetSetti
     }
     return result;
   });
-  writing = next.catch(() => undefined);
-  return next;
 };
 const update = (patch: Partial<Settings>): Promise<SetSettingsResult> =>
   save((settings) => updateDesktopPilotSettings(settings, patch, navigator.language));
 
+async function mutationSettings() {
+  const snapshot = await host.invoke<PilotSnapshot>(PILOT_CH.snapshot);
+  const settings = desktopPilotSettings(snapshot.settings);
+  return { settings, revision: snapshot.revision,
+    config: desktopPilotRuntime(settings, snapshot.status.enabled, navigator.language).config };
+}
+
 const api: SettingsApi = {
   platform: 'win',
-  capabilities: { features: ['emotes'], autoStart: false, emoteFiles: false },
+  capabilities: { features: ['emotes'], autoStart: false, emoteFiles: true },
   getSettings: async () => desktopPilotSettings((await host.invoke<PilotSnapshot>(PILOT_CH.snapshot)).settings),
   setSettings: update,
   onSettings: (cb) => subscribe(PILOT_CH.settingsChanged, (s) => desktopPilotSettings(s.settings), cb),
@@ -51,7 +63,19 @@ const api: SettingsApi = {
   setEnabled: (enabled) => host.invoke(PILOT_CH.enabled, { enabled }),
   previewPing: (ref) => host.invoke(PILOT_CH.preview, { kind: 'ping', reference: ref }),
   previewEmote: (ref) => host.invoke(PILOT_CH.preview, { kind: 'emote', reference: ref }),
-  importEmote: unsupported, removeEmote: unsupported, setEmoteSound: unsupported,
+  importEmote: (file) => oneAtATime(async (): Promise<ImportResult> => {
+    const live = await mutationSettings();
+    return host.invoke(PILOT_CH.importEmote, imageUpload(live, file));
+  }),
+  removeEmote: (id) => oneAtATime(async () => {
+    const live = await mutationSettings();
+    const settings = desktopPilotSettings({ ...live.settings, customEmotes: live.settings.customEmotes.filter((c) => c.id !== id) });
+    await host.invoke(PILOT_CH.removeEmote, { id, live: { ...live, settings } });
+  }),
+  setEmoteSound: (id, bytes) => oneAtATime(async (): Promise<SoundResult> => {
+    const live = await mutationSettings();
+    return host.invoke(PILOT_CH.emoteSound, emoteUpload({ live, id, length: bytes?.length ?? null }, bytes ? [bytes] : []));
+  }),
   setEmoteFx: async (id, fx) => {
     if (fx !== undefined && !isEmoteFx(fx)) return;
     await save((s) => ({ ok: true, settings: desktopPilotSettings({ ...s,
@@ -82,30 +106,8 @@ const api: SettingsApi = {
 window.settingsApi = api;
 void import('./main');
 
-async function smokeTest(): Promise<void> {
-  const snapshot = await host.invoke<PilotSnapshot & { smoke?: boolean }>(PILOT_CH.snapshot);
+void host.invoke<PilotSnapshot & { smoke?: boolean }>(PILOT_CH.snapshot).then(async (snapshot) => {
   if (!snapshot.smoke) return;
-  const original = desktopPilotSettings(snapshot.settings);
-  try {
-    await api.setEnabled(false);
-    const changed = await update({ volume: original.volume === 41 ? 42 : 41 });
-    const stored = await api.getSettings();
-    if (!changed.ok || stored.volume !== changed.settings.volume || (await api.getStatus()).enabled) {
-      throw new Error('Settings round trip failed');
-    }
-    const restored = await update({ volume: original.volume });
-    if (!restored.ok) throw new Error('Could not restore settings');
-    await api.setEnabled(snapshot.status.enabled);
-    await api.previewPing('danger');
-    await api.previewEmote(original.clickEmoteId);
-    if (original.customEmotes.length) {
-      const res = await fetch(customStillUrl(customHash(original.customEmotes[0].id)));
-      if (!res.ok || (await res.arrayBuffer()).byteLength === 0) throw new Error('Custom image could not be read');
-    }
-    await host.invoke(PILOT_CH.smokeResult, { passed: true });
-  } catch (error) {
-    console.error(error);
-    await host.invoke(PILOT_CH.smokeResult, { passed: false });
-  }
-}
-void smokeTest();
+  const { runPilotSmoke } = await import('./pilotSmoke');
+  await runPilotSmoke(api, host, snapshot);
+});

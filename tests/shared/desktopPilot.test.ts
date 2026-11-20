@@ -44,4 +44,14 @@ describe('desktopPilot', () => {
       url: `lolping://emotes/${'a'.repeat(32)}.anim`, sound: `lolping://emotes/${'a'.repeat(32)}.sound` });
     expect(desktopPilotArt(settings, `c:${'b'.repeat(32)}`)).toEqual({ kind: 'placeholder' });
   });
+
+  it('repairs the wheel and click emote after an imported image is removed', () => {
+    const id = `c:${'a'.repeat(32)}`;
+    const settings = desktopPilotSettings({ customEmotes: [{ id, name: 'A', animated: false }],
+      emoteWheel: [id, ...DEFAULT_SETTINGS.emoteWheel.slice(1)], clickEmoteId: id });
+    const removed = desktopPilotSettings({ ...settings, customEmotes: [] });
+    expect(removed.emoteWheel).not.toContain(id);
+    expect(removed.clickEmoteId).not.toBe(id);
+    expect(new Set(removed.emoteWheel).size).toBe(8);
+  });
 });

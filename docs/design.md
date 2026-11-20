@@ -17,32 +17,46 @@ All WebViews use the same browser arguments because WebView2 shares a browser en
 The pilot paints a light or dark settings surface following the system theme. The shared settings CSS stays transparent
 for Electron's Mica; without the pilot surface, a dark Fluent theme could sit on WebView2's default white background.
 
-Drag/click pings, emote gestures, previews and existing custom image/sound playback are connected. Custom file management,
-rooms, startup launch and updates remain unavailable, and the settings page hides those controls through optional runtime
+Drag/click pings, emote gestures, previews and custom image/sound management are connected. Rooms, startup launch and
+updates remain unavailable, and the settings page hides those controls through optional runtime
 capabilities. The shipping Electron preload supplies no capability restriction, so its controls retain their behaviour.
-Existing emotes are read-only through a separate custom scheme: filenames must be hashes with a known suffix, symlinks
-are refused, and file sizes are capped. Vite substitutes only the pilot's custom asset URL functions for WebView2's
+Existing emotes are read-only through a separate custom scheme. New imports and sound overrides live in the Rust data
+folder; imported metadata still uses the original IDs and settings schema. Filenames must be hashes with a known suffix,
+symlinks are refused, file sizes are capped, and reads require a current custom entry. A local still owns that image's
+files. A sound override marker prevents an inherited OGG from masking a new local MP3, or coming back after sound removal.
+Vite substitutes only the pilot's custom asset URL functions for WebView2's
 localhost scheme mapping. The pilot adds no automatic network hosts. Display changes still need a restart, and the pilot
 must not replace the shipping app before the remaining compatibility paths are migrated and tested.
 
 The comparison script uses the helper's simulation mode to avoid installing hooks alongside a running app. It includes
 all descendants in private-working-set and private-byte samples. It does not measure GPU allocation, power or latency.
+Counter status 0 (valid) and 1 (new data) are accepted. Missing fields, incomplete process trees and zero or invalid
+aggregate resident samples are retried rather than counted as memory savings. Each host must produce ten valid samples.
 Use a release Rust build and identical settings, monitor layout and renderer assets for both hosts. The frontend's
 optional `LOLPING_PILOT_DEMO=1` mode exercises wheel and ping rendering without generating OS input; leave it unset for
 idle memory samples. The benchmark forces the same build snapshot into both runtimes. The settings smoke mode uses an
 isolated workspace directory and checks save/read/restore, runtime pause and preview delivery. Neither test substitutes
-for real input and sound checks.
+for real input and sound checks. Custom asset smoke checks run the existing image/audio preparation code in WebView2,
+then import, preview, modify and remove a real still/HD pair and sound in the isolated directory.
 
-On 2026-11-20, one local Windows run with two displays, Electron 44.10.2 and Tauri 2.12.7 averaged 649.97 MiB private
-working set for the Electron control (8 processes) and 547.46 MiB for Tauri (12 processes), a reduction of 102.51 MiB
-(15.8%). Average private bytes were 737.79 MiB and 637.07 MiB respectively. Each host had ten idle samples after the same
-eight-second warm-up. This is a pilot result, not a promise for the complete app or other machines. Raw samples are
-generated at `out/desktop-pilot/memory-samples.json` and are not committed.
+Custom image uploads carry a little-endian metadata length, bounded UTF-8 JSON, then raw still/HD/animation bytes. Sound
+uploads use the same framing. Rust validates every length before slicing, checks WebP/GIF dimensions and animation flags,
+verifies the linked HD's SHA-256 hash and computes the still's ID. The original 24-entry, byte and dimension limits apply.
+Native mutations run off the UI thread, share the settings revision lock, and publish through the existing snapshot event.
+The settings adapter serializes them with ordinary edits. Temporary files and backups restore earlier files if any write
+or settings save fails; only the Rust directory is writable. Removing an image uses the shared normalizer to repair wheel
+slots before persisting. Format decoding and the five-second sound limit remain in the existing renderer preparation path.
+The settings WebView disables Tauri's native drag/drop handler so the existing HTML file-drop and wheel-drag handlers
+receive Windows drag events.
 
-After settings and emotes were connected, the same ten-sample idle comparison averaged 654.10 MiB for Electron and
-533.62 MiB for Tauri, about 120.48 MiB (18.4%) less private working set. Average private bytes were 667.50 MiB and
-622.63 MiB. Electron's resident samples ranged from 502.04 to 671.13 MiB, so this run is evidence of a reduction on this
-machine, not a fixed saving. The settings window was closed; room and chat services are still absent from both hosts.
+On 2026-11-20, after correcting counter validation, a local Windows run with two displays, Electron 44.10.2 and Tauri
+2.12.7 averaged 636.83 MiB private working set for Electron (8 processes) and 544.39 MiB for Tauri (12 processes),
+a reduction of 92.44 MiB (14.5%). Average private bytes were 724.48 MiB and 634.67 MiB respectively. Each host had ten
+valid idle samples after the same eight-second warm-up. Electron ranged from 495.38 to 652.67 MiB; Tauri ranged from
+535.99 to 545.48 MiB. This replaces the earlier exploratory measurements, whose counter validation was incomplete.
+The settings window was closed; room and chat services are still absent from both hosts. This measures the limited
+pilot workload on this machine, not the complete app or a fixed saving. Raw samples are generated at
+`out/desktop-pilot/memory-samples.json` and are not committed.
 
 **Date:** 2026-10-01
 **Status:** Implemented in v0.1.0; wheel customization (Bait, Vision Cleared, drag-and-drop slots) added in v0.2.1; rooms over LAN added in v0.3.0 (§12); emotes added in v0.5.0 (§13); foreign-chord pass-through and the fullscreen pause added in v0.5.1; custom emote stills travelling between room members, emote effects, signed room messages, room text, votes and the room panel (§14), feature switches (§15) and experimental Linux X11 support added in v0.5.2; League's normal ping colours instead of the colourblind set, overlays that follow a game's display mode change, and Windows 10 before 1703 in v0.5.3; the AI teammate (§16) in v0.6.0
