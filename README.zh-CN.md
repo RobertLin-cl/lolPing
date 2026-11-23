@@ -26,6 +26,20 @@
 
 信号和表情会出现在全屏录制/共享画面里，所以在 Discord 或 OBS 上看你直播的朋友也能看到。lolPing 只是一个桌面小玩具：它不会读取、修改或注入英雄联盟本身。
 
+## Windows Rust 版（本 fork）
+
+[下载 v1.0.0](https://github.com/RobertLin-cl/lolPing/releases/tag/desktop-v1.0.0)，需要 Windows 11 x64 和 WebView2 Runtime。
+运行 `lolPing-Desktop-Pilot-Setup-1.0.0-x64.exe`。主程序使用 Rust/Tauri，沿用网页界面和 C++ 输入 helper；
+AI 队友保持关闭。macOS 和 Linux 仍使用下文介绍的 Electron 版。
+
+切换前，关闭 Electron 版的开机启动，并从托盘退出。Rust 版以 `lolPing Desktop Pilot` 单独安装，首次启动导入设置，
+之后将数据保存在 `%APPDATA%/com.lolping.desktop-pilot`。原版设置和素材不会被修改。
+要切回原版，先关闭 Rust 版的开机启动，退出后再打开 Electron 版。
+安装程序没有代码签名。实际输入、声音、混合缩放显示器和安装后的开机启动仍需更广泛的测试。
+
+本次 Rust 发布不替换 GitHub 的 Latest 版本，让现有 Electron 更新检查继续使用 v0.6.7。
+请手动安装 v1.0.0；后续 Rust 更新来源还需要保持这项隔离。
+
 ## 安装
 
 ### Windows

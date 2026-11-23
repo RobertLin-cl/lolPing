@@ -150,6 +150,14 @@ GitHub SHA-256 digests and bounded sizes. The manifest must match the app ID, Ta
 installer filename, size and digest. Electron-only, draft and prerelease feeds produce no compatible update. Neither
 `latest.yml` nor an Electron installer is consumed. Release publishing remains the maintainer's work; the existing
 Electron release workflow is unchanged and does not upload these Rust artifacts automatically.
+Rust releases use `desktop-v<version>` tags so they do not trigger the legacy `v*` Electron workflow.
+The Windows Rust release starts at v1.0.0. Its npm, Cargo and Tauri versions agree; the app ID, profile directory,
+installer name and startup value retain their existing pilot names so earlier Rust installations keep working.
+Build and test the installer locally before publishing the installer and manifest together on the fork's GitHub Releases.
+Rust releases do not migrate Electron installations automatically; v0.6.7 remains the last Electron release.
+Publish v1.0.0 with `--latest=false` so the legacy Electron updater still finds v0.6.7's `latest.yml`.
+The current Rust updater also reads `/releases/latest`, so manual installation is required for this transition;
+future Rust automatic delivery needs a separate discovery path before changing the Latest marker.
 
 Metadata requests use WinHTTP with TLS 1.2/1.3 and normal system certificate validation. Redirects are capped and checked
 against this fork's API/download paths and GitHub's `release-assets.githubusercontent.com` host; HTTPS downgrade,

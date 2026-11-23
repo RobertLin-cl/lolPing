@@ -26,6 +26,20 @@
 
 Pings and emotes show up in whole-screen capture, so friends watching your Discord or OBS stream see them too. lolPing is a desktop toy: it doesn't read, change or hook into League itself.
 
+## Windows Rust release (this fork)
+
+[Download v1.0.0](https://github.com/RobertLin-cl/lolPing/releases/tag/desktop-v1.0.0) for Windows 11 x64 with WebView2 Runtime.
+Run `lolPing-Desktop-Pilot-Setup-1.0.0-x64.exe`. The host uses Rust/Tauri, the existing web interface and C++ input helper;
+the AI teammate stays disabled. macOS and Linux still use the Electron version described below.
+
+Before switching, turn off Electron's login startup and quit it from the tray. Rust installs separately as
+`lolPing Desktop Pilot`, imports settings on first launch and keeps its own data in `%APPDATA%/com.lolping.desktop-pilot`.
+Original settings and assets are not changed. To switch back, disable Rust's login startup, quit it and reopen Electron.
+This installer is not code-signed. Physical input, sound, mixed-DPI displays and login after installation still need broader testing.
+
+This Rust release is published without replacing GitHub's Latest release, so existing Electron update checks keep using
+v0.6.7. Install v1.0.0 manually; a future Rust update feed will need to preserve that separation.
+
 ## Linux (experimental)
 
 This source tree includes an **X11 Linux port**, with AppImage and Debian package targets. It requires a genuine X11 session, XInput 2.1/XTest and a compositor. Wayland sessions, including XWayland inside Wayland, are not supported yet. Caps Lock triggers and automatic fullscreen-game detection are not available on Linux. Build with Node.js 22.12+, a C++20 compiler and `libx11-dev libxi-dev libxtst-dev`, then run `npm ci` and `npm run dist:linux`.
