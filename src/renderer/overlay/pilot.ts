@@ -12,6 +12,7 @@ import { pilotChatLines, type PilotChatLine } from '../../shared/pilotChat';
 import { historyVisible } from '../../shared/chatFilter';
 import { shouldPlayChatSound } from '../../shared/chatSound';
 import { isSummonerSpellId } from '../../shared/summonerSpells';
+import { pilotUpdateState } from '../../shared/pilotUpdate';
 
 async function start(): Promise<void> {
   const host = pilotHost();
@@ -95,6 +96,18 @@ async function start(): Promise<void> {
       if (notice.kind === 'lost') title = t.toastMemberLost(notice.name);
     }
     if (title) dispatch('toast:show', { title, body });
+  });
+  await host.listen(PILOT_CH.updateNotice, ({ payload }) => {
+    if (data.displayId !== 0) return;
+    const notice = JSON.parse(payload) as { kind: string; version: string; error?: unknown };
+    const t = strings(resolveLang(settings.language, navigator.language), 'win');
+    if (notice.kind === 'available') dispatch('toast:show', { title: t.updateToastTitle, body: t.updateToastBody(notice.version) });
+    if (notice.kind === 'installing') dispatch('toast:show', { title: t.restartingToUpdate, body: '' });
+    if (notice.kind === 'checked') dispatch('toast:show', { title: t.upToDate, body: '' });
+    if (notice.kind === 'error') {
+      const state = pilotUpdateState(notice.error, settings, navigator.language);
+      if (state?.phase === 'error') dispatch('toast:show', { title: t.updateErrorToastTitle, body: state.message });
+    }
   });
   await host.listen(PILOT_CH.placementChanged, ({ payload }) => {
     const placed = JSON.parse(payload) as { displayId: number; kind: string };

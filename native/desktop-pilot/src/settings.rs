@@ -69,6 +69,7 @@ impl SettingsState {
 
     pub fn snapshot(&self) -> Value {
         serde_json::json!({ "settings": self.settings, "revision": self.revision,
+            "version":env!("LOLPING_APP_VERSION"),
             "autoStart":self.startup.available(),
             "status": { "enabled": self.enabled, "helper": self.helper_status } })
     }
@@ -102,6 +103,13 @@ impl SettingsState {
         write_settings(&self.file, &serde_json::to_vec_pretty(&settings).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
         self.settings = settings; self.revision += 1;
         Ok(())
+    }
+
+    pub fn remember_update(&mut self,version: &str) -> Result<(),String> {
+        if self.settings["updateNotifiedVersion"] == version { return Ok(()); }
+        let mut settings = self.settings.clone(); settings["updateNotifiedVersion"] = version.into();
+        write_settings(&self.file,&serde_json::to_vec_pretty(&settings).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+        self.settings = settings; self.revision += 1; Ok(())
     }
 
     pub fn save_chat_bounds(&mut self, bounds: Value) -> Result<(), String> {

@@ -245,7 +245,7 @@ npm run dev
 这是内存实验，尚不能替代完整应用。Tauri 和小型 Electron 对照程序运行同一套轮盘界面及 C++ 输入辅助程序。
 Rust 程序现已支持设置界面、拖动和点击信号、表情轮盘、预览，以及自定义图片、动画和音效的导入与删除。
 现已连接 LAN／Nostr 房间，可共享信号和表情，并支持房间聊天和单独加密的私聊。
-投票、房间面板、召唤师技能和 Windows 登录启动已连接。更新尚未连接，AI 队友保持关闭。
+投票、房间面板、召唤师技能和 Windows 登录启动已连接。安装版支持独立校验的 Rust 更新，AI 队友保持关闭。
 显示器、分辨率和缩放变化后会自动重建浮层，真实显示器变化仍需人工测试。
 此实验暂不支持 macOS 和 Linux。
 
@@ -259,6 +259,19 @@ cargo build --release --manifest-path native/desktop-pilot/Cargo.toml
 ```
 
 测试真实手势前先退出正式版；启动脚本会拒绝同时运行第二套输入钩子。托盘菜单可以退出原型。
+运行 `node tools/package-desktop-pilot.mjs` 可构建本机 Windows 安装包，需要本机 NSIS 3，
+也可用 `LOLPING_MAKENSIS` 指定 `makensis.exe`。文件与更新清单保存在 `out/desktop-pilot/package`。
+封装只使用预设设置，包含 Rust 程序、输入辅助程序和许可证。安装目录、开始菜单和卸载项都与 Electron 分开。
+WebView2 必须预先安装，安装程序不会自行下载；卸载保留个人设置和其他文件，此命令不会发布版本。
+
+切换前先关闭 Electron 的开机启动并退出，再安装和运行 Rust 原型。首次导入时 Rust 的开机启动保持关闭。
+返回原版时先关闭 Rust 的开机启动并退出，再打开 Electron。两边分别保存修改，原版素材保持只读。
+安装版只使用程序同目录的输入辅助程序。更新只接受此 fork 的 Rust 专用资源，并核对清单、大小和 SHA-256，
+点击“更新”后才下载并安装；源码和便携版隐藏更新控件。现有 Electron 发布流程不会上传 Rust 资源，
+仍需维护者检查后手动发布；本机安装包尚未签名。
+`node tools/test-desktop-update.mjs` 在工作区隔离目录中检查安装、拒绝被修改的文件和越界重定向、校验后升级、
+安装版启动和卸载，不改真实安装或开机项目。公开发布、SmartScreen、实际登录和正式升级仍需人工检查。
+
 `-Runtime electron` 启动使用相同界面的对照程序。`-Simulate` 使用没有全局钩子的辅助程序模拟模式，
 可以在正式版保持运行时测量；`-Seconds 40` 会自动退出。
 `-Demo -Seconds 60` 会显示轮盘三十秒后释放信号，不生成系统输入。

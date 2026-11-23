@@ -20,20 +20,26 @@ await build({
 });
 const { desktopPilotSettings, desktopPilotRuntime, resolveLang, strings, RELAYS } = createRequire(import.meta.url)(shared);
 let raw = {};
-try {
-  raw = JSON.parse(await readFile(join(process.env.APPDATA ?? '', 'lolPing/settings.json'), 'utf8'));
-} catch (error) {
-  if (error.code !== 'ENOENT') console.warn('Could not load existing settings; using defaults:', error.message);
+const packageBuild = process.env.LOLPING_PILOT_PACKAGE_BUILD === '1';
+if (!packageBuild) {
+  try {
+    raw = JSON.parse(await readFile(join(process.env.APPDATA ?? '', 'lolPing/settings.json'), 'utf8'));
+  } catch (error) {
+    if (error.code !== 'ENOENT') console.warn('Could not load existing settings; using defaults:', error.message);
+  }
 }
 const settings = desktopPilotSettings({ ...raw, launchAtStartup: false });
 const lang = resolveLang(settings.language, Intl.DateTimeFormat().resolvedOptions().locale);
 const text = strings(lang, 'win');
 await writeFile(join(output, 'bootstrap.json'), JSON.stringify({
   settings,
+  packageBuild,
   relays: RELAYS,
   ...desktopPilotRuntime(settings, settings.enabledOnStart, lang),
   settingsLabel: text.traySettings,
   quit: text.trayQuit,
+  trayUpdate: {check:text.trayCheckForUpdates,checking:text.checking,start:text.updateNow,
+    downloading:text.trayDownloading(0).replace('0%', '{percent}%'),installing:text.trayInstalling},
 }));
 await buildWeb({ configFile: resolve('tools/desktop-pilot.config.ts') });
 console.log(`Desktop pilot frontend built at ${pathToFileURL(output)}`);

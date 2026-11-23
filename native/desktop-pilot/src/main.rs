@@ -13,6 +13,10 @@ mod panels;
 mod spells;
 mod votes;
 mod startup;
+mod runtime_files;
+mod update_protocol;
+mod update_http;
+mod updater;
 
 use serde_json::Value;
 use settings::{HelperConfig, SettingsState, SettingsUpdate};
@@ -31,6 +35,7 @@ struct Pilot {
     rooms: rooms::Service,
     chat: chat::Chat,
     panels: panels::Panels,
+    updater: updater::Service,
 }
 
 impl Pilot {
@@ -108,7 +113,7 @@ fn start_helper(app: &tauri::AppHandle, pilot: &Pilot, layout: &Layout) -> Resul
     };
     let mut helper = pilot.helper.lock().map_err(|e| e.to_string())?;
     if helper.is_some() { return Ok(()); }
-    let mut command = Command::new(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../hook-helper/build/hook-helper.exe"));
+    let mut command = Command::new(runtime_files::helper_at(&std::env::current_exe().map_err(|e| e.to_string())?)?);
     if std::env::var_os("LOLPING_PILOT_SIMULATE").is_some() { command.arg("--simulate"); }
     command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::inherit());
     #[cfg(windows)]
@@ -198,6 +203,7 @@ fn pilot_snapshot(window: tauri::WebviewWindow, pilot: tauri::State<Pilot>) -> R
     snapshot["chatSmoke"] = std::env::var_os("LOLPING_PILOT_CHAT_SMOKE").is_some().into();
     snapshot["panelSmoke"] = std::env::var_os("LOLPING_PILOT_PANEL_SMOKE").is_some().into();
     snapshot["startupSmoke"] = std::env::var_os("LOLPING_PILOT_STARTUP_SMOKE").is_some().into();
+    snapshot["updateSmoke"] = pilot.updater.smoke.into();
     Ok(snapshot)
 }
 
@@ -220,6 +226,39 @@ async fn pilot_room(window: tauri::WebviewWindow, app: tauri::AppHandle, action:
         _ => return Err("Unknown room operation".into()),
     };
     tauri::async_runtime::spawn_blocking(move || app.state::<Pilot>().rooms.call(operation)).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn pilot_update_smoke(window: tauri::WebviewWindow,app: tauri::AppHandle,phase: String,scenario: Option<String>,detail: Option<String>) -> Result<Value,String> {
+    settings_window(&window)?;
+    if !app.state::<Pilot>().updater.smoke { return Err("Update smoke is not enabled".into()); }
+    match phase.as_str() {
+        "fixture" => {
+            let scenario = scenario.ok_or("Missing fixture")?;
+            tauri::async_runtime::spawn_blocking(move || updater::smoke_fixture(&app,&scenario)).await.map_err(|e| e.to_string())??;
+        },
+        "passed" => println!("Pilot update smoke: passed"),
+        "failed" => { println!("Pilot update smoke: failed {}",detail.unwrap_or_default()); app.exit(1); },
+        _ => return Err("Unknown update smoke phase".into()),
+    }
+    Ok(Value::Null)
+}
+
+#[tauri::command]
+fn pilot_update(window: tauri::WebviewWindow, app: tauri::AppHandle, action: String) -> Result<Value,String> {
+    settings_window(&window)?; let pilot = app.state::<Pilot>();
+    match action.as_str() {
+        "get" => {},
+        "check" => pilot.updater.request(updater::Operation::Check { tray:false })?,
+        "start" => pilot.updater.request(updater::Operation::Start { tray:false })?,
+        "open" => {
+            if let Some(url) = pilot.updater.notes.lock().map_err(|e| e.to_string())?.clone() {
+                Command::new("explorer.exe").arg(url).spawn().map_err(|e| e.to_string())?;
+            }
+        },
+        _ => return Err("Unknown update action".into()),
+    }
+    pilot.updater.snapshot()
 }
 
 #[tauri::command]
@@ -658,6 +697,10 @@ fn watch_displays(app: tauri::AppHandle, displays: Vec<Display>) {
 }
 
 fn main() {
+    if std::env::args_os().any(|arg| arg == "--package-info") {
+        println!("{}",serde_json::json!({"appId":runtime_files::APP_ID,"version":env!("LOLPING_APP_VERSION"),"packageBuild":env!("LOLPING_PACKAGE_BUILD") == "1"}));
+        return;
+    }
     let _instance = match startup::instance() {
         Ok(Some(guard)) => guard,
         Ok(None) => { eprintln!("Desktop pilot is already running; use its tray menu"); return; },
@@ -701,7 +744,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![pilot_bootstrap, pilot_snapshot, pilot_ready, pilot_save,
             pilot_enabled, pilot_capture, pilot_retry, pilot_placed, pilot_preview, pilot_idle,
             pilot_open_folder, pilot_open_project, pilot_stop, pilot_smoke_result,
-            pilot_import_emote, pilot_emote_sound, pilot_remove_emote, pilot_room, pilot_room_smoke, pilot_chat, pilot_chat_smoke, pilot_panel, pilot_panel_smoke, pilot_startup_smoke])
+            pilot_import_emote, pilot_emote_sound, pilot_remove_emote, pilot_room, pilot_room_smoke, pilot_chat, pilot_chat_smoke, pilot_panel, pilot_panel_smoke, pilot_startup_smoke, pilot_update, pilot_update_smoke])
         .setup(|app| {
             if std::env::var_os("LOLPING_PILOT_ROOM_SMOKE").is_some()
                 && (std::env::var_os("LOLPING_PILOT_SIMULATE").is_none() || std::env::var_os("LOLPING_PILOT_DATA_DIR").is_none()) {
@@ -730,20 +773,29 @@ fn main() {
             let library = EmoteLibrary { root: data_dir.join("emotes"),
                 inherited: PathBuf::from(std::env::var_os("APPDATA").unwrap_or_default()).join("lolPing/emotes") };
             let (rooms, room_requests) = rooms::Service::new();
+            let (updater,update_requests) = updater::Service::new(&std::env::current_exe()?,&data_dir)?;
             let mut store = SettingsState::new(settings,file); store.startup = startup;
             app.manage(Pilot { library, layout: Mutex::new(Layout::new(displays.clone())), exiting: AtomicBool::new(false), helper: Mutex::new(None),
-                store: Mutex::new(store), rooms, chat: chat::Chat::default(), panels: panels::Panels::default() });
+                store: Mutex::new(store), rooms, chat: chat::Chat::default(), panels: panels::Panels::default(), updater });
             let relays = bootstrap["relays"].as_array().ok_or("Missing relay list; rebuild the pilot frontend")?
                 .iter().filter_map(Value::as_str).map(str::to_owned).collect();
             rooms::run(app.handle().clone(), room_requests, relays);
             chat::run(app.handle().clone());
             panels::run(app.handle().clone());
+            updater::run(app.handle().clone(),update_requests);
             let quit = tauri::menu::MenuItem::with_id(app, "quit", bootstrap["quit"].as_str().ok_or("Missing quit label")?, true, None::<&str>)?;
             let settings_item = tauri::menu::MenuItem::with_id(app, "settings", bootstrap["settingsLabel"].as_str().ok_or("Missing settings label")?, true, None::<&str>)?;
-            let menu = tauri::menu::Menu::with_items(app, &[&settings_item, &quit])?;
+            let check_update = tauri::menu::MenuItem::with_id(app,"update-check",bootstrap["trayUpdate"]["check"].as_str().unwrap_or(""),true,None::<&str>)?;
+            let start_update = tauri::menu::MenuItem::with_id(app,"update-start",bootstrap["trayUpdate"]["start"].as_str().unwrap_or(""),false,None::<&str>)?;
+            let menu = if app.state::<Pilot>().updater.available {
+                *app.state::<Pilot>().updater.tray.lock().map_err(|e| e.to_string())? = Some((check_update.clone(),start_update.clone(),bootstrap["trayUpdate"].clone()));
+                tauri::menu::Menu::with_items(app,&[&settings_item,&check_update,&start_update,&quit])?
+            } else { tauri::menu::Menu::with_items(app, &[&settings_item, &quit])? };
             tauri::tray::TrayIconBuilder::new().icon(tauri::image::Image::from_bytes(include_bytes!("../../../build/icon.png"))?)
                 .menu(&menu).on_menu_event(|app, event| {
                     if event.id.as_ref() == "quit" { app.exit(0); }
+                    if event.id.as_ref() == "update-check" { let _ = app.state::<Pilot>().updater.request(updater::Operation::Check { tray:true }); }
+                    if event.id.as_ref() == "update-start" { let _ = app.state::<Pilot>().updater.request(updater::Operation::Start { tray:true }); }
                     if event.id.as_ref() == "settings" {
                         let handle = app.clone();
                         std::thread::spawn(move || { if let Err(error) = show_settings(&handle) { eprintln!("{error}"); } });

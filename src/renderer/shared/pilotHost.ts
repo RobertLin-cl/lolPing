@@ -6,6 +6,7 @@ export interface PilotSnapshot {
   revision: number;
   status: AppStatus;
   autoStart?: boolean;
+  version?: string;
 }
 
 export interface PilotBootstrap extends PilotSnapshot {

@@ -17,9 +17,9 @@ All WebViews use the same browser arguments because WebView2 shares a browser en
 The pilot paints a light or dark settings surface following the system theme. The shared settings CSS stays transparent
 for Electron's Mica; without the pilot surface, a dark Fluent theme could sit on WebView2's default white background.
 
-Drag/click pings, emote gestures, previews, custom image/sound management, rooms, chat, votes, the room panel and summoner
-spells and Windows login startup are connected. Updates remain unavailable, and the settings page hides those controls through optional runtime
-capabilities. The shipping Electron preload supplies no capability restriction, so its controls retain their behaviour.
+Drag/click pings, emote gestures, previews, custom image/sound management, rooms, chat, votes, the room panel, summoner
+spells and Windows login startup are connected. Installed Rust builds also expose update controls; development and
+portable copies keep those controls hidden. The shipping Electron preload retains its existing behaviour.
 Existing emotes are read-only through a separate custom scheme. New imports and sound overrides live in the Rust data
 folder; imported metadata still uses the original IDs and settings schema. Filenames must be hashes with a known suffix,
 symlinks are refused, file sizes are capped, and library reads require a current custom entry. A local still owns that image's
@@ -126,6 +126,57 @@ input helper before spawning its own. Neither guard affects isolated simulation 
 rejection and hidden launch. The ignored Rust registry test additionally forces a settings write failure and checks
 rollback plus unrelated-value preservation. Run it explicitly outside the sandbox; it writes only a temporary test
 key. Actual sign-out/login, Windows Task Manager startup controls and installed-path upgrades remain manual checks.
+
+`node tools/package-desktop-pilot.mjs` builds a clean frontend, Rust release host and C++ helper, then creates a per-user
+NSIS installer and `desktop-pilot-update.json` under `out/desktop-pilot/package`. It uses the package's existing version;
+it never changes a version, tags, uploads or publishes. NSIS is taken from the existing local cache, or an explicit
+`LOLPING_MAKENSIS` path. Package builds embed defaults rather than the developer's settings. `--package-info` proves the
+clean-build flag and app identity before staging; `--skip-build` refuses a development binary. Both payloads must be x64.
+The bundle contains the host, hook helper and license, with no context helper, user profile or user assets. Vite embeds
+the UI and bundled assets in the host. A staged portable folder is also produced, with automatic updates disabled.
+
+The installer uses `%LOCALAPPDATA%/Programs/lolPing Desktop Pilot`, a separate HKCU uninstall entry and Start menu link.
+It requires x64 Windows and an existing WebView2 Runtime. Missing prerequisites stop before copying; no runtime download
+or elevation is started. Installer messages use the three `i18n.ts` languages. The installer waits for the updater's PID
+to exit, then holds the same session mutex as the app while replacing files. Existing host/helper files are backed up
+and restored on copy errors. The installed marker binds the directory to the Rust app ID. Installed copies load only
+their sibling helper; a missing helper never falls back to the developer's checkout. Uninstall deletes known program
+files, its own shortcut/registration and a matching startup value, while retaining profile data and unrelated files.
+The `/TEST` installer mode skips real registration and shortcuts and marks its output as a test installation.
+
+The native updater uses the fork's GitHub latest-release API. It accepts a higher numeric version only when the release
+also contains `desktop-pilot-update.json` and the exact `lolPing-Desktop-Pilot-Setup-<version>-x64.exe` asset. Both require
+GitHub SHA-256 digests and bounded sizes. The manifest must match the app ID, Tauri runtime, x64 platform, version,
+installer filename, size and digest. Electron-only, draft and prerelease feeds produce no compatible update. Neither
+`latest.yml` nor an Electron installer is consumed. Release publishing remains the maintainer's work; the existing
+Electron release workflow is unchanged and does not upload these Rust artifacts automatically.
+
+Metadata requests use WinHTTP with TLS 1.2/1.3 and normal system certificate validation. Redirects are capped and checked
+against this fork's API/download paths and GitHub's `release-assets.githubusercontent.com` host; HTTPS downgrade,
+credentials, foreign repositories and arbitrary hosts are rejected. Metadata is bounded to 1 MiB, the manifest to 64 KiB
+and installers to 256 MiB, with connection/read timeouts and an overall response deadline. Isolated fixtures use only one
+explicit loopback origin, with proxies disabled. Public source details follow
+[GitHub's release API](https://docs.github.com/en/rest/releases/releases) and
+[asset digest format](https://docs.github.com/en/rest/releases/assets).
+
+Only the user starts an installer download. It streams into a new partial file, verifies size, executable magic and
+SHA-256, then renames it into the update cache. Failures remove the partial; the cached file is checked again before
+execution. Checks and downloads never overlap, retries keep the checked release, and shutdown cancels transport work.
+Automatic checks begin after 10 seconds and repeat six hours after completion; disabling them cancels the schedule.
+Errors from automatic checks stay quiet. New-version notifications are remembered in settings. Existing update UI,
+translations and notification strings are reused; tray check/start items follow the native state. A verified update
+shows the restart notice, starts the installer with the current PID, and exits through normal hook/room cleanup before
+files are replaced. The per-user install path is preserved. The installer uses the existing HTTPS/checksum trust model;
+these locally built binaries are not Authenticode-signed.
+
+`node tools/test-desktop-update.mjs` runs the real NSIS installer only in `/TEST` mode inside a checked workspace output
+directory. It tests missing-runtime rejection, initial installation, rollback while the helper is locked, an old-file upgrade, malformed metadata, rejected
+redirects, a damaged installer, a verified retry, helper startup from the installed folder and uninstall. Settings and an
+unrelated file must survive. It uses helper simulation and a local HTTP server, never real login/uninstall entries or a
+public release. A real per-user installation, public GitHub delivery, SmartScreen, login after upgrade, interrupted
+installation and switching back to Electron still need manual validation. To switch, turn off Electron's startup and
+quit it before launching Rust; its settings/assets stay read-only. To return, turn off Rust startup, quit it and reopen
+Electron. No automatic migration overwrites either profile or unregisters the other runtime.
 
 The Windows host checks monitor positions, physical sizes and scale factors every 500 ms. On a change it releases the
 input helper and destroys stale overlays, then waits for two matching monitor samples before building replacements.

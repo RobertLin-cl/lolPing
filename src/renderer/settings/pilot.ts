@@ -10,8 +10,10 @@ import { isEmoteFx } from '../../shared/emotes';
 import type { RoomState } from '../../shared/room';
 import { formatRoomCode, parseRoomCode } from '../../shared/roomCode';
 import './pilot.css';
+import { pilotUpdateState } from '../../shared/pilotUpdate';
 
 const host = pilotHost();
+let updateSettings = desktopPilotSettings(null);
 const unsupported = (): Promise<never> => Promise.reject(new Error('This desktop service has not been migrated'));
 const subscribe = <T>(event: string, pick: (snapshot: PilotSnapshot) => T, cb: (value: T) => void): (() => void) => {
   let stopped = false;
@@ -84,9 +86,10 @@ const api: SettingsApi = {
       customEmotes: s.customEmotes.map((c) => c.id === id ? { ...c, fx } : c) }) }));
   },
   getAbout: async () => {
-    const s = desktopPilotSettings((await host.invoke<PilotSnapshot>(PILOT_CH.snapshot)).settings);
+    const snapshot = await host.invoke<PilotSnapshot>(PILOT_CH.snapshot);
+    const s = desktopPilotSettings(snapshot.settings);
     const t = strings(resolveLang(s.language, navigator.language), 'win');
-    return { version: '0.1.0', problems: [], limitations: [t.pilotLimitations] };
+    return { version: snapshot.version ?? '0.1.0', problems: [], limitations: [t.pilotLimitations] };
   },
   openSettingsFolder: () => host.invoke(PILOT_CH.openFolder),
   openProjectPage: () => host.invoke(PILOT_CH.openProject),
@@ -120,8 +123,37 @@ const api: SettingsApi = {
   copyRoomCode: async () => { await host.invoke(PILOT_CH.room, { action: 'copy' }); },
   retryInternet: async () => { await host.invoke(PILOT_CH.room, { action: 'retry' }); },
   onShowSection: () => () => {},
-  getUpdate: async () => null, onUpdate: () => () => {}, checkForUpdates: unsupported,
-  startUpdate: unsupported, openReleasePage: unsupported,
+  getUpdate: async () => pilotUpdateState(await host.invoke(PILOT_CH.update, { action: 'get' }), updateSettings, navigator.language),
+  onUpdate: (cb) => {
+    let stopped = false;
+    let revision = -1;
+    const stops: (() => void)[] = [];
+    const push = (raw: unknown): void => {
+      if (typeof raw === 'object' && raw !== null) {
+        const next = (raw as Record<string, unknown>).revision;
+        if (typeof next === 'number') {
+          if (next < revision) return;
+          revision = next;
+        }
+      }
+      const state = pilotUpdateState(raw, updateSettings, navigator.language);
+      if (!stopped && state) cb(state);
+    };
+    const listen = async (): Promise<void> => {
+      const off = await host.listen(PILOT_CH.updateChanged, ({ payload }) => push(JSON.parse(payload) as unknown));
+      if (stopped) off(); else stops.push(off);
+      const settingsOff = await host.listen(PILOT_CH.settingsChanged, ({ payload }) => {
+        updateSettings = desktopPilotSettings((JSON.parse(payload) as PilotSnapshot).settings);
+        void host.invoke(PILOT_CH.update, { action: 'get' }).then(push);
+      });
+      if (stopped) settingsOff(); else stops.push(settingsOff);
+    };
+    void listen();
+    return () => { stopped = true; for (const stop of stops) stop(); };
+  },
+  checkForUpdates: async () => { await host.invoke(PILOT_CH.update, { action: 'check' }); },
+  startUpdate: async () => { await host.invoke(PILOT_CH.update, { action: 'start' }); },
+  openReleasePage: async () => { await host.invoke(PILOT_CH.update, { action: 'open' }); },
   setTeammateKey: unsupported, hasTeammateKey: unsupported, checkTeammateKey: unsupported,
   checkTeammateAgent: unsupported, pickTeammateFolder: unsupported, getTeammateAgentSnippet: unsupported,
   getTeammateConnectSnippet: unsupported, getTeammateRecentApps: unsupported, getTeammateEditors: unsupported,
@@ -131,9 +163,14 @@ const api: SettingsApi = {
 
 window.settingsApi = api;
 
-void host.invoke<PilotSnapshot & { smoke?: boolean; roomSmoke?: boolean; startupSmoke?: boolean }>(PILOT_CH.snapshot).then(async (snapshot) => {
+void host.invoke<PilotSnapshot & { smoke?: boolean; roomSmoke?: boolean; startupSmoke?: boolean; updateSmoke?: boolean }>(PILOT_CH.snapshot).then(async (snapshot) => {
   if (api.capabilities) api.capabilities.autoStart = snapshot.autoStart === true;
+  updateSettings = desktopPilotSettings(snapshot.settings);
   await import('./main');
+  if (snapshot.updateSmoke) {
+    const { runUpdateSmoke } = await import('./pilotUpdateSmoke');
+    await runUpdateSmoke(api,host); return;
+  }
   if (snapshot.startupSmoke) {
     const { runStartupSmoke } = await import('./pilotStartupSmoke');
     await runStartupSmoke(api,host); return;

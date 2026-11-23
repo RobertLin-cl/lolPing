@@ -210,7 +210,7 @@ This is a memory experiment, not a replacement for the full app. It runs the exi
 inside either Tauri or a small Electron host. The Rust host supports settings, drag/click pings, the emote wheel,
 previews, importing/removing custom images, animations and sounds, and LAN/Nostr rooms with ping and emote sharing.
 Room chat, recipient-only whispers, votes, the room panel, summoner spells and Windows login startup are connected.
-Updates are not connected; the teammate stays disabled.
+Installed Rust builds support their own checked updates; the teammate stays disabled.
 Monitor, resolution and scale changes rebuild overlays automatically. Real display changes still need manual testing. macOS and Linux are not part
 of this experiment.
 
@@ -223,8 +223,24 @@ cargo build --release --manifest-path native/desktop-pilot/Cargo.toml
 ./tools/run-desktop-pilot.ps1 -Runtime tauri
 ```
 
-Quit the normal app before testing real gestures. The runner refuses to start a second input helper. The tray menu quits
-the pilot. `-Runtime electron` runs the same renderer in the control host. `-Simulate` starts the helper without global
+Quit the normal app before testing real gestures. The runner refuses to start a second input helper.
+To build a local Windows installer, run `node tools/package-desktop-pilot.mjs`. It needs local NSIS 3
+(`LOLPING_MAKENSIS` can point to `makensis.exe`) and writes the installer plus update manifest to
+`out/desktop-pilot/package`. It builds clean defaults and packages only the Rust host, input helper and license.
+The per-user install, Start menu link and uninstall entry are separate from Electron. WebView2 must already be installed;
+the installer does not download it. Uninstall keeps profile data and unrelated files. No version is published by this command.
+
+Before switching, turn off startup in Electron and quit it, then install and launch the Rust pilot. Its first settings
+import leaves Rust startup off. To return, turn off Rust startup, quit it and reopen Electron. Each profile keeps its own
+edits; the original assets stay read-only. Normal installed launches use the helper beside the executable.
+Updates use only this fork's compatible Rust release assets, with manifest, size and SHA-256 checks. Nothing installs
+until you click Update. Source/portable builds hide update controls. The Electron release workflow does not publish
+Rust artifacts; a maintainer must review and upload them separately. These local installers are unsigned.
+`node tools/test-desktop-update.mjs` tests installation, tamper/redirect rejection, verified upgrade, bundled launch and
+uninstall in an isolated workspace directory, without changing the real install or startup entries. Public delivery,
+SmartScreen, real login and a production upgrade still need manual checks.
+
+The tray menu quits the pilot. `-Runtime electron` runs the same renderer in the control host. `-Simulate` starts the helper without global
 hooks, so either pilot can be measured while the normal app stays open. `-Seconds 40` exits automatically.
 `-Demo -Seconds 60` shows a wheel for thirty seconds and releases a ping without OS input.
 `-Settings -Simulate` opens the existing settings interface without global hooks. The tray's Settings item opens it

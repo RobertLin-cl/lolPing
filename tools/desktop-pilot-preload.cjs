@@ -6,7 +6,7 @@ contextBridge.exposeInMainWorld('pilotHost', {
     return ipcRenderer.invoke(command, args);
   },
   listen(event, cb) {
-    if (!['pilot-input', 'pilot-settings', 'pilot-status', 'pilot-placed', 'pilot-preview', 'pilot-room-input', 'pilot-room-gone', 'pilot-room', 'pilot-room-notice', 'pilot-chat-line', 'pilot-summoner'].includes(event)) throw new Error('Unknown pilot event');
+    if (!['pilot-input', 'pilot-settings', 'pilot-status', 'pilot-placed', 'pilot-preview', 'pilot-room-input', 'pilot-room-gone', 'pilot-room', 'pilot-room-notice', 'pilot-chat-line', 'pilot-summoner', 'pilot-update-notice'].includes(event)) throw new Error('Unknown pilot event');
     const listener = (_event, payload) => cb({ payload });
     ipcRenderer.on(event, listener);
     return Promise.resolve(() => ipcRenderer.removeListener(event, listener));
