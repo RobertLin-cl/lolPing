@@ -39,7 +39,7 @@ if ($Simulate) { $env:LOLPING_PILOT_SIMULATE = '1' }
 else { Remove-Item Env:LOLPING_PILOT_SIMULATE -ErrorAction SilentlyContinue }
 $env:ELECTRON_RUN_AS_NODE = $null
 if ($Runtime -eq 'tauri') {
-  & ./native/desktop-pilot/target/release/lolping-desktop-pilot.exe
+  & node ./tools/run-desktop-pilot.mjs
 } else {
   & ./node_modules/.bin/electron.cmd tools/desktop-pilot-electron.cjs
 }

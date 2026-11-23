@@ -209,8 +209,8 @@ npm run dev
 This is a memory experiment, not a replacement for the full app. It runs the existing wheel renderer and C++ input helper
 inside either Tauri or a small Electron host. The Rust host supports settings, drag/click pings, the emote wheel,
 previews, importing/removing custom images, animations and sounds, and LAN/Nostr rooms with ping and emote sharing.
-Room chat, recipient-only whispers, votes, the room panel and summoner spells are connected. Startup launch and updates
-are not connected; the teammate stays disabled.
+Room chat, recipient-only whispers, votes, the room panel, summoner spells and Windows login startup are connected.
+Updates are not connected; the teammate stays disabled.
 Monitor, resolution and scale changes rebuild overlays automatically. Real display changes still need manual testing. macOS and Linux are not part
 of this experiment.
 
@@ -242,7 +242,13 @@ received lines show it without taking focus. The window remembers its bounds and
 Room text, ping history, notification sounds, `/mute`, `/w` and `/r` use the existing settings and wording. Real foreground
 restoration, IME input, dragging and audible output still need manual checks.
 
-At first launch the Rust host reads the normal app's settings without changing them. Subsequent edits are saved through
+At first launch the Rust host reads the normal app's settings without changing them.
+Startup uses a separate Windows login entry and starts quietly in the tray. The first import
+leaves startup off; enable it explicitly in the pilot. Moving the executable requires enabling startup again. Simulation
+hides the startup control. `node tools/test-desktop-startup.mjs` tests registration in a temporary registry location and
+checks hidden launch, without changing the real login entries. Actual sign-out/login still needs a manual check.
+
+Subsequent edits are saved through
 a temporary file into `%APPDATA%/com.lolping.desktop-pilot/settings.json`; the normal app keeps its own settings. Changes
 reach every overlay and the helper immediately, without rebuilding. Existing custom images are served read-only from
 the normal app's emote folder. New files and sound overrides stay in the Rust data folder; removing an inherited emote

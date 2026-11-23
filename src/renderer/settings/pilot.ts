@@ -130,9 +130,14 @@ const api: SettingsApi = {
 };
 
 window.settingsApi = api;
-void import('./main');
 
-void host.invoke<PilotSnapshot & { smoke?: boolean; roomSmoke?: boolean }>(PILOT_CH.snapshot).then(async (snapshot) => {
+void host.invoke<PilotSnapshot & { smoke?: boolean; roomSmoke?: boolean; startupSmoke?: boolean }>(PILOT_CH.snapshot).then(async (snapshot) => {
+  if (api.capabilities) api.capabilities.autoStart = snapshot.autoStart === true;
+  await import('./main');
+  if (snapshot.startupSmoke) {
+    const { runStartupSmoke } = await import('./pilotStartupSmoke');
+    await runStartupSmoke(api,host); return;
+  }
   if (snapshot.roomSmoke) {
     const { runPilotRoomSmoke } = await import('./pilotRoomSmoke');
     await runPilotRoomSmoke(api, host);

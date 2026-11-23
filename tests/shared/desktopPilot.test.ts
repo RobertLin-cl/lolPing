@@ -15,6 +15,7 @@ describe('desktopPilot', () => {
     expect(desktopPilotSettings({ features: { roomSpells: true } }).features.roomSpells).toBe(true);
     expect(settings.features.teammate).toBe(false);
     expect(settings.launchAtStartup).toBe(false);
+    expect(desktopPilotSettings({ launchAtStartup: true }).launchAtStartup).toBe(true);
     expect(desktopPilotSettings(null).wheel).toEqual(DEFAULT_SETTINGS.wheel);
   });
 

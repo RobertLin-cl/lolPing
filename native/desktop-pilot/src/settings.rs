@@ -57,24 +57,32 @@ pub struct SettingsState {
     pub sent_suspended: Option<bool>,
     pub config: Option<HelperConfig>,
     pub file: PathBuf,
+    pub startup: crate::startup::Startup,
 }
 
 impl SettingsState {
     pub fn new(settings: Value, file: PathBuf) -> Self {
         let enabled = settings["enabledOnStart"].as_bool().unwrap_or(true);
         Self { settings, revision: 0, enabled, helper_status: "starting", suspended: false, chat_focused: false,
-            sent_config: None, sent_suspended: None, config: None, file }
+            sent_config: None, sent_suspended: None, config: None, file, startup: crate::startup::Startup::default() }
     }
 
     pub fn snapshot(&self) -> Value {
         serde_json::json!({ "settings": self.settings, "revision": self.revision,
+            "autoStart":self.startup.available(),
             "status": { "enabled": self.enabled, "helper": self.helper_status } })
     }
 
     pub fn save(&mut self, settings: Value, mut config: HelperConfig, revision: u64) -> Result<(), String> {
         self.check_update(&settings, revision)?;
         let bytes = serde_json::to_vec_pretty(&settings).map_err(|e| e.to_string())?;
-        write_settings(&self.file, &bytes).map_err(|e| e.to_string())?;
+        let previous = self.startup.change(self.settings["launchAtStartup"] == true,settings["launchAtStartup"] == true)?;
+        if let Err(error) = write_settings(&self.file, &bytes) {
+            if let Some(previous) = previous {
+                self.startup.restore(&previous).map_err(|rollback| format!("{error}; startup rollback failed: {rollback}"))?;
+            }
+            return Err(error.to_string());
+        }
         config.0["enabled"] = Value::Bool(self.enabled);
         self.settings = settings;
         self.config = Some(config);
@@ -109,7 +117,7 @@ fn validate_settings(settings: &Value) -> Result<(), String> {
     if !settings.is_object() || settings.to_string().len() > 262_144 || !settings["enabledOnStart"].is_boolean() {
         return Err("Invalid settings".into());
     }
-    if settings["launchAtStartup"] != false { return Err("Startup service has not been migrated".into()); }
+    if !settings["launchAtStartup"].is_boolean() { return Err("Invalid startup setting".into()); }
     let features = settings["features"].as_object().ok_or("Invalid features")?;
     if features.iter().any(|(key, value)| !value.is_boolean() || (!matches!(key.as_str(), "emotes" | "rooms" | "roomText" | "roomPanel" | "roomVotes" | "roomSpells") && value != false)) {
         return Err("Desktop service has not been migrated".into());

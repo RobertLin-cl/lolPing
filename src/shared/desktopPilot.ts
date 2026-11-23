@@ -10,7 +10,6 @@ import type { SetSettingsResult } from './ipc';
 export function desktopPilotSettings(raw: unknown): Settings {
   const settings = normalizeSettings(raw, 'win');
   settings.features = { ...settings.features, teammate: false };
-  settings.launchAtStartup = false;
   return settings;
 }
 

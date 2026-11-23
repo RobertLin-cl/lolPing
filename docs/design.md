@@ -18,7 +18,7 @@ The pilot paints a light or dark settings surface following the system theme. Th
 for Electron's Mica; without the pilot surface, a dark Fluent theme could sit on WebView2's default white background.
 
 Drag/click pings, emote gestures, previews, custom image/sound management, rooms, chat, votes, the room panel and summoner
-spells are connected. Startup launch and updates remain unavailable, and the settings page hides those controls through optional runtime
+spells and Windows login startup are connected. Updates remain unavailable, and the settings page hides those controls through optional runtime
 capabilities. The shipping Electron preload supplies no capability restriction, so its controls retain their behaviour.
 Existing emotes are read-only through a separate custom scheme. New imports and sound overrides live in the Rust data
 folder; imported metadata still uses the original IDs and settings schema. Filenames must be hashes with a known suffix,
@@ -104,6 +104,28 @@ Tab hold/release, passive casts and capture/pause gates, icons and cooldown rend
 saved history filters, both directions of ready checks and feature-off cleanup. It uses isolated settings, loopback
 sockets and helper simulation. Physical Tab/D/F pass-through, fullscreen focus behaviour and audible output still
 need manual checks on Windows.
+
+Windows startup uses the current user's `Run` key with the separate value `lolPing Desktop Pilot`, containing the
+quoted current executable path and `--hidden`. It never changes Electron's startup value or `StartupApproved` state.
+The first settings import does not register startup. The checkbox reflects this executable's current registration;
+only an explicit preference change writes it. Unrelated settings edits and ordinary launches never restore a value
+removed outside the app. The command is capped at Windows' 260 UTF-16 code-unit limit; paths with quotes, embedded
+control characters or no absolute root are rejected. Moving a portable executable requires enabling startup again.
+See [Microsoft's Run key documentation](https://learn.microsoft.com/en-us/windows/win32/setupapi/run-and-runonce-registry-keys).
+
+Startup writes are part of the native settings transaction: stale revisions fail first, a registry failure leaves
+settings alone, and a failed settings file replacement restores the previous registry value. Simulation, benchmarks
+and isolated data directories disable registration and hide the checkbox. The explicit startup smoke uses a temporary
+`HKCU/Software/lolPingDesktopPilotTests` child instead of `Run`; exit removes only its own test value and empty child.
+Normal manual launch opens settings; `--hidden` stays in the tray. Release builds use the Windows GUI subsystem, so
+login does not open a console. Simulated launches retain the explicit `-Settings`
+flag. A per-session mutex prevents two normal pilot instances, and the native launcher refuses another session-local
+input helper before spawning its own. Neither guard affects isolated simulation runs.
+
+`node tools/test-desktop-startup.mjs` checks the real settings UI bridge, isolated registry enable/disable, stale-save
+rejection and hidden launch. The ignored Rust registry test additionally forces a settings write failure and checks
+rollback plus unrelated-value preservation. Run it explicitly outside the sandbox; it writes only a temporary test
+key. Actual sign-out/login, Windows Task Manager startup controls and installed-path upgrades remain manual checks.
 
 The Windows host checks monitor positions, physical sizes and scale factors every 500 ms. On a change it releases the
 input helper and destroys stale overlays, then waits for two matching monitor samples before building replacements.

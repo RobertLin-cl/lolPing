@@ -65,4 +65,5 @@ export const PILOT_CH = {
   chat: 'pilot_chat', chatHistory: 'pilot-chat-history', chatLine: 'pilot-chat-line',
   chatSmoke: 'pilot_chat_smoke', chatSmokeStart: 'pilot-chat-smoke-start',
   panel: 'pilot_panel', summoner: 'pilot-summoner', panelSmoke: 'pilot_panel_smoke',
+  startupSmoke: 'pilot_startup_smoke',
 } as const;

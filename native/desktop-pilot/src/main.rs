@@ -1,3 +1,5 @@
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 mod assets;
 mod settings;
 mod emote_format;
@@ -10,6 +12,7 @@ mod chat_state;
 mod panels;
 mod spells;
 mod votes;
+mod startup;
 
 use serde_json::Value;
 use settings::{HelperConfig, SettingsState, SettingsUpdate};
@@ -92,6 +95,7 @@ fn display_for(pilot: &Pilot, label: &str) -> Result<Display, String> {
 fn start_helper(app: &tauri::AppHandle, pilot: &Pilot, layout: &Layout) -> Result<(), String> {
     if !layout.is_ready() || pilot.exiting.load(Ordering::SeqCst) { return Ok(()); }
     if pilot.helper.lock().map_err(|e| e.to_string())?.is_some() { return Ok(()); }
+    startup::check_helper()?;
     let (config, suspended) = {
         let mut store = pilot.store.lock().map_err(|e| e.to_string())?;
         let mut config = store.config.clone().ok_or("Overlay is not ready")?;
@@ -193,6 +197,7 @@ fn pilot_snapshot(window: tauri::WebviewWindow, pilot: tauri::State<Pilot>) -> R
     snapshot["roomSmoke"] = std::env::var_os("LOLPING_PILOT_ROOM_SMOKE").is_some().into();
     snapshot["chatSmoke"] = std::env::var_os("LOLPING_PILOT_CHAT_SMOKE").is_some().into();
     snapshot["panelSmoke"] = std::env::var_os("LOLPING_PILOT_PANEL_SMOKE").is_some().into();
+    snapshot["startupSmoke"] = std::env::var_os("LOLPING_PILOT_STARTUP_SMOKE").is_some().into();
     Ok(snapshot)
 }
 
@@ -215,6 +220,18 @@ async fn pilot_room(window: tauri::WebviewWindow, app: tauri::AppHandle, action:
         _ => return Err("Unknown room operation".into()),
     };
     tauri::async_runtime::spawn_blocking(move || app.state::<Pilot>().rooms.call(operation)).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn pilot_startup_smoke(window: tauri::WebviewWindow, app: tauri::AppHandle, phase: String, detail: Option<String>) -> Result<Value,String> {
+    settings_window(&window)?;
+    if std::env::var_os("LOLPING_PILOT_STARTUP_SMOKE").is_none() || std::env::var_os("LOLPING_PILOT_SIMULATE").is_none()
+        || std::env::var_os("LOLPING_PILOT_DATA_DIR").is_none() { return Err("Startup smoke is not enabled".into()); }
+    if ["passed","failed"].contains(&phase.as_str()) {
+        println!("Pilot startup smoke: {phase} {}",detail.unwrap_or_default()); app.exit(if phase == "passed" {0} else {1});
+    } else if phase != "status" { return Err("Unknown startup smoke phase".into()); }
+    let pilot = app.state::<Pilot>(); let store = pilot.store.lock().map_err(|e| e.to_string())?;
+    Ok(serde_json::json!({"registered":store.startup.enabled()?,"command":store.startup.registered_command()?}))
 }
 
 #[tauri::command]
@@ -641,6 +658,11 @@ fn watch_displays(app: tauri::AppHandle, displays: Vec<Display>) {
 }
 
 fn main() {
+    let _instance = match startup::instance() {
+        Ok(Some(guard)) => guard,
+        Ok(None) => { eprintln!("Desktop pilot is already running; use its tray menu"); return; },
+        Err(error) => { eprintln!("Cannot guard desktop pilot instance: {error}"); return; },
+    };
     if !cfg!(windows) { eprintln!("The desktop pilot currently targets Windows only"); std::process::exit(1); }
     let app = tauri::Builder::default()
         .register_uri_scheme_protocol("lolping", |context, request| {
@@ -679,7 +701,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![pilot_bootstrap, pilot_snapshot, pilot_ready, pilot_save,
             pilot_enabled, pilot_capture, pilot_retry, pilot_placed, pilot_preview, pilot_idle,
             pilot_open_folder, pilot_open_project, pilot_stop, pilot_smoke_result,
-            pilot_import_emote, pilot_emote_sound, pilot_remove_emote, pilot_room, pilot_room_smoke, pilot_chat, pilot_chat_smoke, pilot_panel, pilot_panel_smoke])
+            pilot_import_emote, pilot_emote_sound, pilot_remove_emote, pilot_room, pilot_room_smoke, pilot_chat, pilot_chat_smoke, pilot_panel, pilot_panel_smoke, pilot_startup_smoke])
         .setup(|app| {
             if std::env::var_os("LOLPING_PILOT_ROOM_SMOKE").is_some()
                 && (std::env::var_os("LOLPING_PILOT_SIMULATE").is_none() || std::env::var_os("LOLPING_PILOT_DATA_DIR").is_none()) {
@@ -695,19 +717,22 @@ fn main() {
             let source = if file.exists() { file.clone() } else {
                 PathBuf::from(std::env::var_os("APPDATA").unwrap_or_default()).join("lolPing/settings.json")
             };
-            let settings = if std::env::var_os("LOLPING_PILOT_BENCHMARK").is_some() { bootstrap["settings"].clone() } else { match std::fs::read(&source) {
+            let mut settings = if std::env::var_os("LOLPING_PILOT_BENCHMARK").is_some() { bootstrap["settings"].clone() } else { match std::fs::read(&source) {
                 Ok(bytes) => serde_json::from_slice(&bytes).unwrap_or_else(|error| {
                     eprintln!("Cannot parse settings: {error}"); bootstrap["settings"].clone()
                 }),
                 Err(_) => bootstrap["settings"].clone(),
             } };
+            let startup = startup::Startup::for_app()?;
+            settings["launchAtStartup"] = startup.enabled().unwrap_or_else(|error| { eprintln!("Cannot read startup registration: {error}"); false }).into();
             let displays = available_displays(app.handle())?;
             if displays.is_empty() { return Err("No displays found".into()); }
             let library = EmoteLibrary { root: data_dir.join("emotes"),
                 inherited: PathBuf::from(std::env::var_os("APPDATA").unwrap_or_default()).join("lolPing/emotes") };
             let (rooms, room_requests) = rooms::Service::new();
+            let mut store = SettingsState::new(settings,file); store.startup = startup;
             app.manage(Pilot { library, layout: Mutex::new(Layout::new(displays.clone())), exiting: AtomicBool::new(false), helper: Mutex::new(None),
-                store: Mutex::new(SettingsState::new(settings, file)), rooms, chat: chat::Chat::default(), panels: panels::Panels::default() });
+                store: Mutex::new(store), rooms, chat: chat::Chat::default(), panels: panels::Panels::default() });
             let relays = bootstrap["relays"].as_array().ok_or("Missing relay list; rebuild the pilot frontend")?
                 .iter().filter_map(Value::as_str).map(str::to_owned).collect();
             rooms::run(app.handle().clone(), room_requests, relays);
@@ -738,7 +763,10 @@ fn main() {
             } else {
                 watch_displays(app.handle().clone(), displays);
             }
-            if std::env::var_os("LOLPING_PILOT_SETTINGS").is_some() {
+            let hidden = std::env::args_os().any(|arg| arg == "--hidden");
+            let show_settings_on_launch = startup::show_settings(hidden,startup::isolated(),std::env::var_os("LOLPING_PILOT_SETTINGS").is_some());
+            if std::env::var_os("LOLPING_PILOT_STARTUP_SMOKE").is_some() { println!("Pilot startup smoke launch: hidden={hidden}, settings={show_settings_on_launch}"); }
+            if show_settings_on_launch {
                 let handle = app.handle().clone();
                 std::thread::spawn(move || { if let Err(error) = show_settings(&handle) { eprintln!("{error}"); } });
             }
@@ -761,6 +789,7 @@ fn main() {
             // Serialize shutdown with a renderer that has just requested helper startup.
             { let _layout = pilot.layout.lock(); pilot.stop(); }
             pilot.rooms.stop();
+            if let Ok(store) = pilot.store.lock() { store.startup.cleanup(); };
         }
     });
 }

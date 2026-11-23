@@ -25,7 +25,7 @@ try {
 } catch (error) {
   if (error.code !== 'ENOENT') console.warn('Could not load existing settings; using defaults:', error.message);
 }
-const settings = desktopPilotSettings(raw);
+const settings = desktopPilotSettings({ ...raw, launchAtStartup: false });
 const lang = resolveLang(settings.language, Intl.DateTimeFormat().resolvedOptions().locale);
 const text = strings(lang, 'win');
 await writeFile(join(output, 'bootstrap.json'), JSON.stringify({
