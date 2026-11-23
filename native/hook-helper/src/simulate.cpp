@@ -44,6 +44,9 @@ void report(Output& out, const Result& r, bool withSimLine) {
 
 int runSimulate(Output& out) {
   Decision d;
+#ifdef _WIN32
+  d.setSummonerKeysSupported(true);
+#endif
   out.ready();
   std::string line;
   while (std::getline(std::cin, line)) {

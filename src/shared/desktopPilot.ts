@@ -9,8 +9,7 @@ import type { SetSettingsResult } from './ipc';
 /** Keep unavailable features off until their desktop services have been migrated. */
 export function desktopPilotSettings(raw: unknown): Settings {
   const settings = normalizeSettings(raw, 'win');
-  settings.features = { ...settings.features, rooms: false, roomText: false, roomVotes: false,
-    roomPanel: false, roomSpells: false, teammate: false };
+  settings.features = { ...settings.features, teammate: false };
   settings.launchAtStartup = false;
   return settings;
 }

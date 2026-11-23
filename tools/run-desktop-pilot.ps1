@@ -4,13 +4,20 @@ param(
   [switch]$Simulate,
   [switch]$Demo,
   [switch]$Settings,
-  [switch]$Smoke
+  [switch]$Smoke,
+  [switch]$DisplaySmoke
 )
 $ErrorActionPreference = 'Stop'
 Set-Location (Split-Path $PSScriptRoot -Parent)
 if (Get-Process lolping-desktop-pilot -ErrorAction SilentlyContinue) { throw 'The Rust pilot is already running.' }
 Remove-Item Env:LOLPING_PILOT_BENCHMARK -ErrorAction SilentlyContinue
-if ($Smoke) {
+if ($DisplaySmoke -and ($Runtime -ne 'tauri' -or $Smoke)) { throw 'Display smoke requires Tauri and cannot run with settings smoke.' }
+if ($DisplaySmoke) {
+  $Simulate = $true
+  $env:LOLPING_PILOT_DISPLAY_SMOKE = '1'
+  $env:LOLPING_PILOT_DATA_DIR = Join-Path (Get-Location) 'out/desktop-pilot/smoke-displays'
+  Remove-Item Env:LOLPING_PILOT_SMOKE -ErrorAction SilentlyContinue
+} elseif ($Smoke) {
   $Settings = $true; $Simulate = $true
   $env:LOLPING_PILOT_SMOKE = '1'
   $env:LOLPING_PILOT_DATA_DIR = Join-Path (Get-Location) 'out/desktop-pilot/smoke-settings'
@@ -18,6 +25,7 @@ if ($Smoke) {
   Remove-Item Env:LOLPING_PILOT_SMOKE -ErrorAction SilentlyContinue
   Remove-Item Env:LOLPING_PILOT_DATA_DIR -ErrorAction SilentlyContinue
 }
+if (-not $DisplaySmoke) { Remove-Item Env:LOLPING_PILOT_DISPLAY_SMOKE -ErrorAction SilentlyContinue }
 if ($Demo) { $Simulate = $true; $env:LOLPING_PILOT_DEMO = '1' }
 else { Remove-Item Env:LOLPING_PILOT_DEMO -ErrorAction SilentlyContinue }
 if ($Settings) { $env:LOLPING_PILOT_SETTINGS = '1' }

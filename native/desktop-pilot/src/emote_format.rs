@@ -124,7 +124,7 @@ fn webp_size(bytes: &[u8]) -> Option<(usize, usize)> {
     (size.0 > 0 && size.1 > 0).then_some(size)
 }
 
-fn check_still(bytes: &[u8], limit: usize, side: usize) -> Result<(), &'static str> {
+pub fn check_still(bytes: &[u8], limit: usize, side: usize) -> Result<(), &'static str> {
     if !is_webp(bytes) || (bytes.get(12..16) == Some(b"VP8X".as_slice()) && bytes.get(20).is_some_and(|b| b & 2 != 0)) {
         return Err("type");
     }
@@ -167,7 +167,7 @@ fn gif_extent(bytes: &[u8]) -> Option<(usize, usize)> {
     (width > 0 && height > 0).then_some((width, height))
 }
 
-fn linked_hd(bytes: &[u8]) -> Option<String> {
+pub fn linked_hd(bytes: &[u8]) -> Option<String> {
     let stop = bytes.len().min(8 + little_endian(bytes, 4, 4)?);
     let mut at = 12;
     let mut link = None;

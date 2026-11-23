@@ -8,13 +8,17 @@ describe('desktopPilot', () => {
     expect(settings.volume).toBe(42);
     expect(settings.clickPing).toBe(true);
     expect(settings.features.emotes).toBe(true);
-    expect(settings.features.rooms).toBe(false);
+    expect(settings.features.rooms).toBe(true);
+    expect(settings.features.roomText).toBe(true);
+    expect(settings.features.roomPanel).toBe(true);
+    expect(settings.features.roomVotes).toBe(true);
+    expect(desktopPilotSettings({ features: { roomSpells: true } }).features.roomSpells).toBe(true);
     expect(settings.features.teammate).toBe(false);
     expect(settings.launchAtStartup).toBe(false);
     expect(desktopPilotSettings(null).wheel).toEqual(DEFAULT_SETTINGS.wheel);
   });
 
-  it('keeps unavailable shortcuts out of the helper even when old settings enable them', () => {
+  it('leaves live chat keys to the host and keeps unmigrated shortcuts off', () => {
     const settings = desktopPilotSettings(DEFAULT_SETTINGS);
     const { config, overlay } = desktopPilotRuntime(settings, false, 'zh-TW');
     expect(config).toMatchObject({ enabled: false, textVk: 0, panelVk: 0, summonerKeys: false, askTrigger: 'off' });

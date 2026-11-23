@@ -12,12 +12,13 @@ const shared = join(output, 'shared.cjs');
 await build({
   stdin: {
     contents: `export { desktopPilotSettings, desktopPilotRuntime } from './src/shared/desktopPilot';
-      export { resolveLang, strings } from './src/shared/i18n';`,
+      export { resolveLang, strings } from './src/shared/i18n';
+      export { RELAYS } from './src/main/relays';`,
     resolveDir: process.cwd(),
   },
   bundle: true, platform: 'node', format: 'cjs', outfile: shared,
 });
-const { desktopPilotSettings, desktopPilotRuntime, resolveLang, strings } = createRequire(import.meta.url)(shared);
+const { desktopPilotSettings, desktopPilotRuntime, resolveLang, strings, RELAYS } = createRequire(import.meta.url)(shared);
 let raw = {};
 try {
   raw = JSON.parse(await readFile(join(process.env.APPDATA ?? '', 'lolPing/settings.json'), 'utf8'));
@@ -29,6 +30,7 @@ const lang = resolveLang(settings.language, Intl.DateTimeFormat().resolvedOption
 const text = strings(lang, 'win');
 await writeFile(join(output, 'bootstrap.json'), JSON.stringify({
   settings,
+  relays: RELAYS,
   ...desktopPilotRuntime(settings, settings.enabledOnStart, lang),
   settingsLabel: text.traySettings,
   quit: text.trayQuit,

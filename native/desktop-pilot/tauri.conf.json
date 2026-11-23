@@ -10,7 +10,7 @@
     "security": {
       "capabilities": [{
         "identifier": "pilot-overlay",
-        "windows": ["overlay-*", "settings"],
+        "windows": ["overlay-*", "settings", "chat", "roster", "vote"],
         "permissions": ["core:event:allow-listen", "core:event:allow-unlisten"]
       }]
     }

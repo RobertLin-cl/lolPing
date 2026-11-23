@@ -208,8 +208,10 @@ npm run dev
 
 This is a memory experiment, not a replacement for the full app. It runs the existing wheel renderer and C++ input helper
 inside either Tauri or a small Electron host. The Rust host supports settings, drag/click pings, the emote wheel,
-previews, and importing/removing custom images, animations and sounds. Rooms, chat, startup launch,
-updates and the teammate are not connected. Display changes require restarting the pilot. macOS and Linux are not part
+previews, importing/removing custom images, animations and sounds, and LAN/Nostr rooms with ping and emote sharing.
+Room chat, recipient-only whispers, votes, the room panel and summoner spells are connected. Startup launch and updates
+are not connected; the teammate stays disabled.
+Monitor, resolution and scale changes rebuild overlays automatically. Real display changes still need manual testing. macOS and Linux are not part
 of this experiment.
 
 Install the Rust MSVC toolchain and WebView2 Runtime as well as the Windows build tools above, then run:
@@ -229,6 +231,16 @@ hooks, so either pilot can be measured while the normal app stays open. `-Second
 later. Closing settings destroys that WebView. `-Smoke -Seconds 40` checks a settings save/read/restore, runtime pause,
 and previews using a separate test folder under `out/desktop-pilot`. It also encodes a real PNG into a linked still/HD
 pair, imports it, attaches and removes a sound, changes its effect, and checks wheel repair and file removal.
+`-DisplaySmoke` checks synthetic monitor changes in real WebViews. After building the release host,
+`node tools/test-desktop-rooms.mjs` checks rooms against original TypeScript peers on loopback, including relay reconnects
+and custom still/HD transfers. Both tests use simulated input and isolated settings; neither contacts public relays.
+Add `--chat` to check the shared chat page, Ctrl+Enter, Enter/Escape, Tab completion, remembered size and private-message
+identity protection against original peers. Add `--panel` to check the roster, vote widgets, spell cooldowns, history
+filters and original peer vote/spell interoperability. Physical key pass-through, fullscreen focus and sound still need manual checks.
+In a room, the existing text shortcut opens the chat window for typing;
+received lines show it without taking focus. The window remembers its bounds and follows the saved auto-hide time.
+Room text, ping history, notification sounds, `/mute`, `/w` and `/r` use the existing settings and wording. Real foreground
+restoration, IME input, dragging and audible output still need manual checks.
 
 At first launch the Rust host reads the normal app's settings without changing them. Subsequent edits are saved through
 a temporary file into `%APPDATA%/com.lolping.desktop-pilot/settings.json`; the normal app keeps its own settings. Changes
@@ -236,8 +248,12 @@ reach every overlay and the helper immediately, without rebuilding. Existing cus
 the normal app's emote folder. New files and sound overrides stay in the Rust data folder; removing an inherited emote
 only removes it from the Rust list. Local sound overrides also hide the original sound when cleared. Uploads use raw
 binary packets, and Rust checks sizes, image dimensions, HD links and content hashes again before writing. File writes
-are rolled back if another file or the settings save fails. Reads accept bounded, hash-only paths for current entries.
-The pilot adds no automatic app network hosts; the About
+are rolled back if another file or the settings save fails. Reads accept bounded, hash-only paths for current entries
+and verified received stills. Friends' stills use a memory cache capped at 400 files and 14 MiB and are fetched again
+after restart. Animation and sound files are never shared.
+While in a room, the pilot uses the same LAN port and six Nostr relays as the normal app, with the same room encryption.
+Rejoin follows the existing setting; leaving closes the connections, and disabling internet leaves only LAN.
+The room privacy notes above also apply to the pilot. No new relay hosts are added. The About
 page opens this fork's GitHub page only on request. Development downloads Rust crates, and the installed WebView2 Runtime
 is managed separately from the app.
 

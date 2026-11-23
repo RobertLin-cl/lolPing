@@ -17,16 +17,106 @@ All WebViews use the same browser arguments because WebView2 shares a browser en
 The pilot paints a light or dark settings surface following the system theme. The shared settings CSS stays transparent
 for Electron's Mica; without the pilot surface, a dark Fluent theme could sit on WebView2's default white background.
 
-Drag/click pings, emote gestures, previews and custom image/sound management are connected. Rooms, startup launch and
-updates remain unavailable, and the settings page hides those controls through optional runtime
+Drag/click pings, emote gestures, previews, custom image/sound management, rooms, chat, votes, the room panel and summoner
+spells are connected. Startup launch and updates remain unavailable, and the settings page hides those controls through optional runtime
 capabilities. The shipping Electron preload supplies no capability restriction, so its controls retain their behaviour.
 Existing emotes are read-only through a separate custom scheme. New imports and sound overrides live in the Rust data
 folder; imported metadata still uses the original IDs and settings schema. Filenames must be hashes with a known suffix,
-symlinks are refused, file sizes are capped, and reads require a current custom entry. A local still owns that image's
+symlinks are refused, file sizes are capped, and library reads require a current custom entry. A local still owns that image's
 files. A sound override marker prevents an inherited OGG from masking a new local MP3, or coming back after sound removal.
 Vite substitutes only the pilot's custom asset URL functions for WebView2's
-localhost scheme mapping. The pilot adds no automatic network hosts. Display changes still need a restart, and the pilot
-must not replace the shipping app before the remaining compatibility paths are migrated and tested.
+localhost scheme mapping. The pilot adds no automatic network hosts. The pilot must not replace the shipping app before
+the remaining compatibility paths are migrated and tested.
+
+Rooms run in a separate Rust worker, away from the UI and input helper. It starts UDP on port 47474 only while in a room,
+prefers live LAN unicast and uses Nostr for members without a live LAN path. Directed broadcasts refresh every five
+seconds. The relay list is generated from `src/main/relays.ts`, so the pilot contacts the same six hosts as Electron.
+Turning internet off stops relay workers without a bye; leaving sends a bye and closes both transports. Relay workers
+use bounded queues, TLS certificate validation, reconnect backoff, a publish cooldown and our own echoes for health.
+No network socket is opened while idle. Automatic rejoin follows the existing setting and is disabled in smoke and
+benchmark modes. The last room is saved in the Rust settings file; explicit leave clears it, normal exit preserves it.
+
+The native room protocol keeps scrypt/HKDF keys, AES-256-GCM framing, Ed25519 signature tails, the signed/unsigned replay
+windows, the 16-member cap and existing packet, flood and relay publish limits. Presence follows the text/votes feature switches,
+includes an X25519 whisper key and carries optional local spell state. Display #1 is the primary, followed by displays from left to right; room
+coordinates stay fractional and fall back to the primary when a requested display is missing. Display rebuilding does
+not leave the room. Room full, join, leave and connection-loss notices reuse existing translations.
+
+Friends' custom stills and linked HD stills are requested in bounded chunks and verified against their hashes and image
+headers before entering a memory cache, capped at 400 files and 14 MiB. The pilot does not persist this cache; missing
+images are fetched again after a restart. Animations and sounds do not travel. Serving is restricted to the hashes on
+the local wheel and centre, with 750-byte chunks, a 256 KiB assembly cap and the existing LAN pacing and relay token reserve.
+The custom scheme also serves verified cached stills; it never serves sounds from the cache.
+
+After building the frontend and release host, `node tools/test-desktop-rooms.mjs` runs the real Tauri app with simulated
+input, isolated settings and original TypeScript LAN/relay peers on loopback. It checks create/join/leave, remembered
+codes, member mute, pause, internet off/on, Nostr signatures, bidirectional click pings/emotes and still/HD transfers.
+It does not contact public relays or change the real app's files. Real LAN discovery, public WSS connectivity, firewall
+prompts, sleep/wake and physical input still need manual checks.
+
+Room text uses the existing chat renderer in an opaque, resizable Tauri window. Ctrl+Enter is enabled only while an
+enabled, active room has text on; leaving restores pass-through. Native focus suspends gestures together with settings
+key capture, so closing either window cannot release the other's suspension. Unchanged roster updates never re-send
+helper configuration or cancel an ongoing gesture. A received line uses a non-activating Windows show; the shortcut
+focuses the page and uses the existing helper `activate` command, restricted to this host's own windows. The shared page
+keeps focus after sending, uses the same two-step Escape/Enter behaviour and Tab completion, and drags through a native
+command. A hidden chat retains its page until the room is left or text is switched off. Bounds are saved after 500 ms
+without a move or resize. The idle timer follows `chatHideS` and waits while focused or hovered.
+Each chat page receives a native generation token. Room switches and window replacement invalidate old ready, hide,
+hover, drag and submit requests, including commands already queued on the room worker.
+
+History stays in memory, capped at 500 lines and cleared on room changes. The native host stores plain text and semantic
+ping/command records; the frontend uses `i18n.ts` for their words and reuses saved chat filters, timestamps and notification
+sound policy. Spot and scrolling styles still use the overlay. `/mute`, `/mute all`, `/w` and `/r` keep their existing
+matching rules; `/ff`, `/noff` and `/ready` use the native vote state. Whispers preserve the original X25519/HKDF recipient box and Ed25519
+signature binding. Their outer room peer and Nostr key are fresh per message, and LAN whispers use one unicast recipient.
+The inner timestamp and ephemeral key guard against replay, with a 20/s pre-decryption budget and bounded memory.
+
+`node tools/test-desktop-rooms.mjs --chat` also checks original text/whisper peers, Ctrl+Enter through the simulated
+helper, quiet display, Enter/Escape, Tab completion, bounds persistence and timer-driven native hiding. A third relay peer
+checks that it cannot read whispers; the test relay also rejects known session identities on whisper envelopes. No global
+hooks or screen capture are used. Real foreground restoration over games, IME composition, dragging, mixed-DPI placement
+and audible notification output still need manual checks.
+
+The roster and vote widgets reuse `renderer/panel` through a Tauri adapter. Tab's first press and release still reach
+the app underneath; the native host waits `panelHoldS` before revealing the roster, and release cancels a pending show.
+The roster is centred on the cursor's display, accepts clicks without keyboard focus and hides during capture or pause.
+Vote cards use the primary work area and remain ordinary switchable Windows windows, shown without taking focus.
+Pages subscribe and render their first snapshot before a native ready handshake allows either panel to appear.
+Only the roster can report alive/spell state, mute, start votes or save history filters; the vote card can only answer.
+Queued actions carry the room identity and ballots carry the vote ID, so a replaced session or vote cannot receive them.
+
+Rust counts surrender, ready and kick votes using the original fixed electorate, thresholds and local deadlines.
+The first ballot is final; departures count as no, answers repeat every three seconds and results stay visible for three
+seconds. Ballots bypass pause, mute and the ping bucket but keep their own per-member limit. A passed kick blocks that
+identity for this room session; a kick against ourselves leaves and clears local room state. Vote results use semantic
+history records and existing translated sentences. Turning votes off discards the current vote without a result.
+
+Passive D/F events use the existing Windows helper and never consume the keys. Rust keeps the same eleven spell
+cooldowns and sequential Smite charges in memory, resets the pair on selection/session/feature changes, and preserves
+it while paused or while the helper restarts. Settings capture disables passive reporting; typing chat can still cast,
+as in Electron. Only local accepted casts send the overlay sound event. Presence coalesces changed spell state over the
+existing transports; receivers validate the optional pair and keep its newest sequence. Spell-click history uses the
+sender's click clock for the reported seconds and the local wall clock for the history timestamp.
+
+`node tools/test-desktop-rooms.mjs --panel` adds real roster/vote page checks with original TypeScript room/vote peers:
+Tab hold/release, passive casts and capture/pause gates, icons and cooldown rendering, alive/spell reports, clear/mute,
+saved history filters, both directions of ready checks and feature-off cleanup. It uses isolated settings, loopback
+sockets and helper simulation. Physical Tab/D/F pass-through, fullscreen focus behaviour and audible output still
+need manual checks on Windows.
+
+The Windows host checks monitor positions, physical sizes and scale factors every 500 ms. On a change it releases the
+input helper and destroys stale overlays, then waits for two matching monitor samples before building replacements.
+Each rebuild gives the windows new labels and fresh coordinate maps. Input resumes only after every native window is
+placed, made click-through, and its renderer has subscribed. Old helper output and queued renderer commands cannot affect
+the replacement windows. Runtime pause, settings key capture and saved settings survive rebuilding. With no monitors,
+the tray host waits without input hooks; if a replacement renderer is not ready within 15 seconds, the host exits and
+releases input. The current wheel and pings are cleared during a display change.
+
+`tools/run-desktop-pilot.ps1 -Runtime tauri -DisplaySmoke` uses simulated input and an isolated data directory. It checks
+real WebView creation, physical sizes, renderer readiness, retired-window cleanup and helper restart through synthetic
+size/scale changes, monitor removal, an empty layout and restoration. It also checks that paused state and settings survive.
+It does not change Windows display settings or replace manual hot-plug, mixed-DPI, gesture, sound and input pass-through checks.
 
 The comparison script uses the helper's simulation mode to avoid installing hooks alongside a running app. It includes
 all descendants in private-working-set and private-byte samples. It does not measure GPU allocation, power or latency.
@@ -54,9 +144,10 @@ On 2026-11-20, after correcting counter validation, a local Windows run with two
 a reduction of 92.44 MiB (14.5%). Average private bytes were 724.48 MiB and 634.67 MiB respectively. Each host had ten
 valid idle samples after the same eight-second warm-up. Electron ranged from 495.38 to 652.67 MiB; Tauri ranged from
 535.99 to 545.48 MiB. This replaces the earlier exploratory measurements, whose counter validation was incomplete.
-The settings window was closed; room and chat services are still absent from both hosts. This measures the limited
+The settings window was closed; room and chat services were absent from both hosts in that build. This measures the limited
 pilot workload on this machine, not the complete app or a fixed saving. Raw samples are generated at
 `out/desktop-pilot/memory-samples.json` and are not committed.
+Remeasure after the migration; these samples predate native rooms and display watching.
 
 **Date:** 2026-10-01
 **Status:** Implemented in v0.1.0; wheel customization (Bait, Vision Cleared, drag-and-drop slots) added in v0.2.1; rooms over LAN added in v0.3.0 (§12); emotes added in v0.5.0 (§13); foreign-chord pass-through and the fullscreen pause added in v0.5.1; custom emote stills travelling between room members, emote effects, signed room messages, room text, votes and the room panel (§14), feature switches (§15) and experimental Linux X11 support added in v0.5.2; League's normal ping colours instead of the colourblind set, overlays that follow a game's display mode change, and Windows 10 before 1703 in v0.5.3; the AI teammate (§16) in v0.6.0

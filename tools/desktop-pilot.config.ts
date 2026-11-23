@@ -29,6 +29,6 @@ export default defineConfig({
   build: {
     outDir: resolve('out/desktop-pilot/web'),
     emptyOutDir: true,
-    rollupOptions: { input: [resolve('src/renderer/overlay/index.html'), resolve('src/renderer/settings/index.html')] },
+    rollupOptions: { input: [resolve('src/renderer/overlay/index.html'), resolve('src/renderer/settings/index.html'), resolve('src/renderer/text/index.html'), resolve('src/renderer/panel/index.html')] },
   },
 });

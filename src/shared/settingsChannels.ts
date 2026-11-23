@@ -59,4 +59,10 @@ export const PILOT_CH = {
   importEmote: 'pilot_import_emote', removeEmote: 'pilot_remove_emote', emoteSound: 'pilot_emote_sound',
   settingsChanged: 'pilot-settings', statusChanged: 'pilot-status', input: 'pilot-input',
   placementChanged: 'pilot-placed', previewed: 'pilot-preview',
+  room: 'pilot_room', roomChanged: 'pilot-room', roomInput: 'pilot-room-input', roomGone: 'pilot-room-gone',
+  roomSmoke: 'pilot_room_smoke',
+  roomNotice: 'pilot-room-notice',
+  chat: 'pilot_chat', chatHistory: 'pilot-chat-history', chatLine: 'pilot-chat-line',
+  chatSmoke: 'pilot_chat_smoke', chatSmokeStart: 'pilot-chat-smoke-start',
+  panel: 'pilot_panel', summoner: 'pilot-summoner', panelSmoke: 'pilot_panel_smoke',
 } as const;
