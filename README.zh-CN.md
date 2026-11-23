@@ -37,8 +37,9 @@ AI 队友保持关闭。macOS 和 Linux 仍使用下文介绍的 Electron 版。
 要切回原版，先关闭 Rust 版的开机启动，退出后再打开 Electron 版。
 安装程序没有代码签名。实际输入、声音、混合缩放显示器和安装后的开机启动仍需更广泛的测试。
 
-本次 Rust 发布不替换 GitHub 的 Latest 版本，让现有 Electron 更新检查继续使用 v0.6.7。
-请手动安装 v1.0.0；后续 Rust 更新来源还需要保持这项隔离。
+本次 Rust 发布设为 GitHub Latest，但兼容文件 `latest.yml` 仍报告 Electron v0.6.7，所以 Electron v0.6.7
+检查后不会提示更新，也不会下载。更早的 Windows 版本仍可取得原来的 Electron v0.6.7 安装程序。
+请手动安装 Rust v1.0.0；后续 Rust 更新使用独立的 manifest 和安装程序，不使用 Electron 兼容文件。
 
 ## 安装
 

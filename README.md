@@ -37,8 +37,9 @@ Before switching, turn off Electron's login startup and quit it from the tray. R
 Original settings and assets are not changed. To switch back, disable Rust's login startup, quit it and reopen Electron.
 This installer is not code-signed. Physical input, sound, mixed-DPI displays and login after installation still need broader testing.
 
-This Rust release is published without replacing GitHub's Latest release, so existing Electron update checks keep using
-v0.6.7. Install v1.0.0 manually; a future Rust update feed will need to preserve that separation.
+This Rust release is GitHub Latest. Its compatibility `latest.yml` still reports Electron v0.6.7, so Electron v0.6.7
+finds no update and downloads nothing. Older Windows versions can still fetch the original Electron v0.6.7 installer.
+Install Rust v1.0.0 manually; later Rust updates use their own manifest and installer, never the Electron compatibility file.
 
 ## Linux (experimental)
 
